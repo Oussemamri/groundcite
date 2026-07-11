@@ -18,7 +18,7 @@ from groundcite.ports.protocols import DocumentParser
 # PyMuPDF is an optional extra; keep it out of module-level imports so CI (which
 # installs no extras) and the unit suite (which uses a fake parser) never need it.
 try:  # pragma: no cover - exercised only when the pdf extra is installed
-    import fitz  # type: ignore[import-not-found]
+    import fitz  # type: ignore
 except ImportError:  # pragma: no cover
     fitz = None
 

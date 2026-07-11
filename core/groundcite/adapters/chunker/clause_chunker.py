@@ -20,7 +20,7 @@ Rules (spec §6 step 3):
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from uuid import UUID, uuid4
 
 from groundcite.domain.entities import Chunk, ParsedDocument, Section
@@ -43,7 +43,7 @@ class ClauseChunker:
     def chunk(
         self,
         doc: ParsedDocument,
-        sections: list[Section],
+        sections: Sequence[Section],
         section_text: SectionTextMap,
         count_tokens: Callable[[str], int],
     ) -> list[Chunk]:

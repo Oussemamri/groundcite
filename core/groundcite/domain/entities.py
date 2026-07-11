@@ -146,3 +146,21 @@ class ParsedDocument(_Frozen):
     document_id: UUID | None = None
     standard_code: str | None = None
     title: str | None = None
+
+
+class DocumentMeta(_Frozen):
+    """Incoming metadata for one ingest (spec §6 ``ingest(pdf_path, doc_meta)``).
+
+    What the CLI/POST /documents call supplies: enough to build the documents
+    row. ``license_note`` is MANDATORY (spec §13). The ``Document`` id is
+    assigned by the store on upsert (or preserved on re-ingest by slug).
+    """
+
+    slug: str
+    standard_code: str
+    title: str
+    organization: str
+    license_note: str
+    version: str | None = None
+    language: str = "en"
+    source_url: str | None = None

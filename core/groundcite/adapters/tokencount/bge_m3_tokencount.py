@@ -28,13 +28,20 @@ def _load_tokenizer(model_name: str) -> Any:
 
 
 class BgeM3TokenCounter:
-    """Token counter using the bge-m3 tokenizer (spec §6.1 #4)."""
+    """Token counter using the bge-m3 tokenizer (spec §6.1 #4).
+
+    The tokenizer loads lazily on first ``count`` (not in ``__init__``) so
+    ``container.build_services`` can construct this adapter even when the embed
+    extra is absent (CI); the call site (real ingest) requires the extra.
+    """
 
     def __init__(self, model_name: str = "BAAI/bge-m3") -> None:
         self._model_name = model_name
-        self._tokenizer = _load_tokenizer(model_name)
+        self._tokenizer: Any = None  # loaded on first count, cached on the instance
 
     def count(self, text: str) -> int:
+        if self._tokenizer is None:
+            self._tokenizer = _load_tokenizer(self._model_name)
         # add_special_tokens=False: chunk content goes into the embedder's
         # encode without special tokens, so the count mirrors what's embedded.
         return len(self._tokenizer.encode(text, add_special_tokens=False))

@@ -4,16 +4,23 @@
 injects them into the services. This is the seam that keeps the dependency rule
 intact: services and adapters never import each other, they meet only here.
 
-P5 stub: returns the service shells with no adapters wired yet. Real wiring
-(embedding/LLM/reranker/store per ``settings``) lands alongside the services in
-Weeks 1–4.
+Adapters construct lazily (models/tokenizers/DB connections open on first use),
+so this function works in CI without the optional extras (pdf/embed) or a live
+Postgres — the IngestionService is fully wired but nothing is opened until used.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
+from groundcite.adapters.chunker.clause_chunker import make_clause_chunker
+from groundcite.adapters.embedding.bge_m3_embed import make_bge_m3_embedder, make_zero_embedder
+from groundcite.adapters.parser.pymupdf_parser import make_pymupdf_parser
+from groundcite.adapters.repository.pg_repo import make_pg_repository
+from groundcite.adapters.structure.cfr_structure import make_cfr_structure_detector
+from groundcite.adapters.tokencount.bge_m3_tokencount import make_bge_m3_token_counter
 from groundcite.config import Settings
+from groundcite.ports.protocols import EmbeddingProvider
 from groundcite.services import (
     AskService,
     EvalService,
@@ -33,15 +40,31 @@ class Services:
 
 
 def build_services(settings: Settings) -> Services:
-    """Build services from config (spec §4 composition root).
+    """Build services from config (spec §4 composition root)."""
+    # The parser and structure detector are dep-free; always wired.
+    parser = make_pymupdf_parser()
+    detector = make_cfr_structure_detector()
+    chunker = make_clause_chunker(min_leaf_tokens=settings.min_leaf_tokens)
+    token_counter = make_bge_m3_token_counter(model_name=settings.embedding_model)
 
-    Stub: adapters are not wired yet. When they are, this function will read
-    ``settings.embedding_provider`` / ``settings.llm_provider`` /
-    ``settings.reranker_enabled`` etc. and construct the matching adapters here.
-    """
-    _ = settings  # will drive adapter selection in later milestones
+    # Embedding: real bge-m3, or zero-vector dry-run when SKIP_EMBEDDINGS.
+    embedder: EmbeddingProvider
+    if settings.skip_embeddings:
+        embedder = make_zero_embedder()
+    else:
+        embedder = make_bge_m3_embedder(model_name=settings.embedding_model)
+
+    repository = make_pg_repository(settings.database_url)
+
     return Services(
-        ingestion=IngestionService(),
+        ingestion=IngestionService(
+            parser=parser,
+            detector=detector,
+            chunker=chunker,
+            embedder=embedder,
+            token_counter=token_counter,
+            repository=repository,
+        ),
         ask=AskService(),
         evals=EvalService(),
         library=LibraryService(),

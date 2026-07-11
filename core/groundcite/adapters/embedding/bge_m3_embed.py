@@ -10,6 +10,7 @@ is batched to bound memory.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import Any
 
 from groundcite.ports.protocols import Vector
 
@@ -25,16 +26,16 @@ _BATCH_SIZE = 32
 
 
 class BgeM3Embedder:
-    """Local bge-m3 embedder implementing EmbeddingProvider (spec §11 default)."""
+    """Local bge-m3 embedder implementing EmbeddingProvider (spec §11 default).
+
+    The FlagModel loads lazily on first ``embed`` (not in ``__init__``) so
+    ``container.build_services`` can construct this adapter even when the embed
+    extra is absent (CI); the call site (real ingest) requires the extra.
+    """
 
     def __init__(self, model_name: str = "BAAI/bge-m3") -> None:
-        if BGEM3FlagModel is None:  # pragma: no cover
-            raise RuntimeError(
-                "FlagEmbedding is not installed. Install the embed extra: `uv sync --extra embed`."
-            )
         self._model_name = model_name
-        # Load once and cache on the instance (not per call).
-        self._model = BGEM3FlagModel(self._model_name, use_fp16=True)
+        self._model: Any = None  # loaded on first embed, cached on the instance
 
     @property
     def dimension(self) -> int:
@@ -43,12 +44,19 @@ class BgeM3Embedder:
     def embed(self, texts: Sequence[str]) -> list[Vector]:
         if not texts:
             return []
+        if self._model is None:
+            if BGEM3FlagModel is None:  # pragma: no cover
+                raise RuntimeError(
+                    "FlagEmbedding is not installed. Install the embed extra: "
+                    "`uv sync --extra embed`."
+                )
+            self._model = BGEM3FlagModel(self._model_name, use_fp16=True)
         out: list[Vector] = []
         for start in range(0, len(texts), _BATCH_SIZE):
             batch = list(texts[start : start + _BATCH_SIZE])
             res = self._model.encode(batch, batch_size=len(batch), max_length=8192)
             vecs = res["dense_vecs"]
-            import numpy as np  # type: ignore[import-not-found]
+            import numpy as np  # type: ignore
 
             for row in vecs:
                 out.append(tuple(float(x) for x in np.asarray(row).tolist()))

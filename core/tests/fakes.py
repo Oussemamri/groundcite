@@ -57,6 +57,23 @@ class FakeRepository:
         self.replace_calls: int = 0
 
     def upsert_document(self, document: Document) -> Document:
+        existing = self.documents.get(document.slug)
+        if existing:
+            # Preserve the canonical id on slug conflict (mirrors the pg_repo
+            # ON CONFLICT … RETURNING id), so re-ingest keeps the same id.
+            kept = existing.model_copy(
+                update={
+                    "standard_code": document.standard_code,
+                    "title": document.title,
+                    "organization": document.organization,
+                    "version": document.version,
+                    "language": document.language,
+                    "source_url": document.source_url,
+                    "license_note": document.license_note,
+                }
+            )
+            self.documents[document.slug] = kept
+            return kept
         self.documents[document.slug] = document
         return document
 

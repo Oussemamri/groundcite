@@ -123,3 +123,23 @@ class EvalResult(_Frozen):
     abstained: bool | None = None
     passed: bool = False
     debug: dict[str, object] = Field(default_factory=dict)
+
+
+class IngestionReport(_Frozen):
+    """Result of one IngestionService.ingest run (spec §6 step 5).
+
+    Carries the sections-found / chunks-created counts, a coarse token-count
+    histogram (bucket -> number of chunks), the orphan-text percentage, and the
+    attached ratio that gates ingestion (≥90%, spec §6 step 2). The CLI prints
+    this; the DoD is <10% orphan on the fetched FAR Part 25.
+    """
+
+    slug: str
+    standard_code: str
+    sections_found: int
+    chunks_created: int
+    token_histogram: dict[str, int] = Field(default_factory=dict)
+    orphan_pct: float
+    attached_pct: float
+    total_text_chars: int
+    document_id: UUID
