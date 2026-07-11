@@ -1,0 +1,55 @@
+# GroundCite services (spec §4.1). v1 is Docker Compose only — no Kubernetes.
+#
+#   docker compose up -d db      # Postgres 16 + pgvector, the only service P5 needs
+#   (cd core && uv run alembic upgrade head)
+#
+# The `api`, `web`, and `ollama` services are scaffolded behind Compose profiles
+# so they don't start by default; they are fleshed out in Weeks 4–5.
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: groundcite-db
+    environment:
+      POSTGRES_USER: groundcite
+      POSTGRES_PASSWORD: groundcite
+      POSTGRES_DB: groundcite
+    ports:
+      # Host 5433 avoids clashing with a locally-installed Postgres on 5432.
+      - "5433:5432"
+    volumes:
+      - groundcite_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U groundcite -d groundcite"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  # --- Optional local LLM (spec §11 ollama alternate). `--profile local` to run. ---
+  ollama:
+    image: ollama/ollama:latest
+    container_name: groundcite-ollama
+    profiles: ["local"]
+    ports:
+      - "11434:11434"
+    volumes:
+      - groundcite_ollama:/root/.ollama
+    restart: unless-stopped
+
+  # --- Application services land in Weeks 4–5 (need Dockerfiles). ---
+  # api:
+  #   build: { context: ., dockerfile: apps/api/Dockerfile }
+  #   depends_on: { db: { condition: service_healthy } }
+  #   env_file: [.env]
+  #   ports: ["8000:8000"]
+  #
+  # web:
+  #   build: { context: ./apps/web }
+  #   depends_on: [api]
+  #   ports: ["3000:3000"]
+
+volumes:
+  groundcite_pgdata:
+  groundcite_ollama:
