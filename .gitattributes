@@ -1,0 +1,9 @@
+# Normalize line endings: LF in the repo (CI runs on Linux), auto on checkout.
+* text=auto eol=lf
+
+# Binary assets (never CRLF-normalized).
+*.png binary
+*.jpg binary
+*.gif binary
+*.pdf binary
+*.ico binary

@@ -1,0 +1,40 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# --- Node / Next.js ---
+node_modules/
+.next/
+out/
+next-env.d.ts
+
+# --- Environment / secrets ---
+.env
+.env.*
+!.env.example
+
+# --- Corpus: PDFs never enter git (size + license, spec §13) ---
+*.pdf
+corpus/
+data/corpus/
+
+# --- Eval reports are generated (spec §8); keep suites + baseline ---
+evals/reports/
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
