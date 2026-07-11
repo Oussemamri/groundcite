@@ -82,14 +82,16 @@
 ├────────────────────────────────────────────────────────────┤
 │  PORTS (core/ports)    EmbeddingProvider  LLMProvider      │
 │  Protocol classes      Reranker  VectorIndex  LexicalIndex │
-│                        DocumentParser  Chunker  Repository │
+│                        DocumentParser  StructureDetector   │
+│                        Chunker  TokenCounter  Repository   │
 ├────────────────────────────────────────────────────────────┤
 │  ADAPTERS (adapters/)  openai_embed  bge_m3_embed          │
 │                        groq_llm  openai_llm  ollama_llm    │
 │                        bge_reranker  llm_reranker          │
 │                        pg_vector  pg_lexical  pg_repo      │
 │                        docling_parser  pymupdf_parser      │
-│                        clause_chunker                      │
+│                        cfr_structure  ecss_structure       │
+│                        clause_chunker  bge_m3_tokencount   │
 └────────────────────────────────────────────────────────────┘
 ```
 
@@ -231,23 +233,61 @@ Migrations: Alembic from day one, even solo. German corpus later: add a `tsv_de`
 
 ## 6. Ingestion pipeline (`IngestionService.ingest(pdf_path, doc_meta)`)
 
+**Type seam (binding — resolved ambiguities, see §6.1 changelog):**
+```python
+# core/ports/protocols.py
+class DocumentParser(Protocol):
+    def parse(self, pdf_path: Path) -> ParsedDocument: ...
+
+class StructureDetector(Protocol):
+    def detect(self, doc: ParsedDocument) -> tuple[list[Section], SectionTextMap]: ...
+    # SectionTextMap = Mapping[section_id, str]  -- raw text span per section,
+    # kept OUT of the Section domain entity (Section stays a pure tree node
+    # matching the `sections` table 1:1). This is the parallel-text-map seam.
+
+class Chunker(Protocol):
+    def chunk(
+        self,
+        doc: ParsedDocument,
+        sections: list[Section],
+        section_text: SectionTextMap,
+        count_tokens: Callable[[str], int],   # injected, see §6.1 note on tokenizer
+    ) -> list[Chunk]: ...
+
+class TokenCounter(Protocol):
+    def count(self, text: str) -> int: ...
+```
+
 1. **Parse** — two adapters behind the `DocumentParser` port:
    - `docling_parser` (default): Docling gives layout, reading order, headings, and tables; export to its structured JSON, not markdown, so page numbers survive. Heavy dependency (pulls ML models) — isolate in an optional extra `groundcite[docling]`.
    - `pymupdf_parser` (fallback / lite): raw text + page numbers + font-size/bold signals. Keep it working — it's the CI-fast path and the air-gapped path.
-   Either way, the parser outputs the same `ParsedDocument` domain object; clause-tree building (step 2) is OURS, not the parser's.
-2. **Structure detection**: regex-driven clause tree builder. Patterns (config per organization):
-   - Numeric hierarchy: `^\d+(\.\d+)*\s+` (ECSS, NASA)
-   - CFR style: `§ 25.1309`, `(a)(1)(i)` sub-levels (FAA/EASA)
-   Build the `sections` tree; unmatched text attaches to the nearest preceding section.
-3. **Clause-aware chunking** (the quality lever — see §14 prep task):
-   - One chunk per leaf clause when ≤ ~450 tokens; split long clauses on sentence boundaries with 60-token overlap; merge tiny sibling clauses up to the parent.
+   Both share ONE port contract test (`tests/ports/test_document_parser_contract.py`) so a second adapter can never silently drift from the first.
+
+2. **Structure detection** — its own port, `StructureDetector`, NOT a private step inside the parser and NOT inlined in the chunker. Reasons this is binding: (a) it must be fake-testable per CLAUDE rule 3 without a real PDF, (b) organization-specific numbering (ECSS/NASA numeric hierarchy vs. FAA/EASA CFR-style `§ 25.1309`, `(a)(1)(i)`) must be swappable per `documents.organization` without touching the chunker, (c) it is exactly the seam future orgs (ESA, EASA) plug into.
+   - Adapters: `cfr_structure` (this session), `ecss_structure` (later, spec §16).
+   - Returns `(sections, section_text)` — the Section tree for persistence, plus a parallel `SectionTextMap` giving the chunker raw text per section without polluting the `Section` domain entity with a `raw_text` field it doesn't otherwise need.
+   - Unmatched text attaches to the nearest preceding section. Fail loudly (raise, don't warn) if <90% of document text ends up attached to some section.
+
+3. **Clause-aware chunking** (the quality lever — see §14 prep task), via the `Chunker` port, `clause_chunker` adapter:
+   - Consumes `(doc, sections, section_text, count_tokens)` — the chunker NEVER imports an embedding library directly. Token counting is injected as a callable so swapping the embedding provider swaps the token counter in lockstep, wired once in `container.py`. Default counter: `bge_m3_tokencount` adapter (tokenizer from the same model as `bge_m3_embed`) — using the target embedder's own tokenizer as the token-count source of truth keeps size limits accurate for whichever embedder is actually configured; cache the loaded tokenizer (do not reload per call).
+   - One chunk per leaf clause when ≤ ~450 tokens (per `count_tokens`); split long clauses on sentence boundaries with 60-token overlap.
+   - **Merge rule (config, not hardcoded):** a leaf clause with no children and `token_count < MIN_LEAF_TOKENS` (default `64`) merges up into its parent's chunk. `MIN_LEAF_TOKENS` lives in `config.py` / `.env.example` alongside `TAU_RETRIEVAL` etc.
    - **Prepend a breadcrumb header to every chunk's `content`:**
      `[ECSS-E-ST-40C §5.4.2.1 — Software requirements > Verification > Test coverage]`
-     This single trick massively improves both dense and lexical retrieval on standards.
+     This single trick massively improves both dense and lexical retrieval on standards. Breadcrumb title comes from the `Section` tree walked from the chunk's `section_id` to the document root — this is why §2 formalizes `Section` as carrying `title` but not raw text.
+
 4. **Embed** in batches via `EmbeddingProvider`; store.
 5. **Report**: sections found, chunks created, token histogram, orphan-text warnings. Fail loudly on <90% text attached to sections.
 
 Idempotency: re-ingesting a `slug` replaces sections/chunks in one transaction.
+
+### 6.1 Ambiguity-resolution changelog (do not re-litigate without a new PR)
+| # | Decision | Rationale |
+|---|---|---|
+| 1 | Chunker signature is `chunk(doc, sections, section_text, count_tokens)` | Keeps `Section` a pure tree node; text and tokenization are explicit injected inputs, not hidden imports. |
+| 2 | Structure detection is a first-class `StructureDetector` port, not inlined | Fake-testable (CLAUDE rule 3); swappable per organization without touching the chunker; the designed seam for §16's ECSS/NASA extension. |
+| 4 | Token counting uses the configured embedder's own tokenizer, injected as a `TokenCounter` port/callable — never a direct adapter-to-adapter import | Chunk sizes stay correct for whichever embedder is active; adapters remain decoupled from each other, wired only through `container.py`. |
+| 5 | Leafless clause merges into parent when `token_count < MIN_LEAF_TOKENS` (default 64) | Configurable — avoids hardcoding a magic number in the chunker; standards vary in how granular their smallest clauses are. |
 
 ---
 
@@ -342,7 +382,7 @@ Rules: routes are thin (parse → service → serialize); pydantic response mode
 **Build (ours, always):** clause-tree construction, clause-aware chunking + breadcrumbs, hybrid fusion (RRF) + clause fast-path, abstention gates A/B, retrieval metrics, the eval runner/report/CI gate, all prompts.
 **Never introduce:** LangChain, LlamaIndex, Haystack, or any RAG orchestration framework. The pipeline in §7 is the portfolio piece; frameworks hollow it out. Reference their source if useful — never depend on it.
 
-Config via `.env` (see `.env.example`): `DATABASE_URL`, `EMBEDDING_PROVIDER=bge_m3|openai`, `LLM_PROVIDER=groq|openai|ollama`, `RERANKER_ENABLED=true`, `TAU_RETRIEVAL=0.35`, provider keys.
+Config via `.env` (see `.env.example`): `DATABASE_URL`, `EMBEDDING_PROVIDER=bge_m3|openai`, `LLM_PROVIDER=groq|openai|ollama`, `RERANKER_ENABLED=true`, `TAU_RETRIEVAL=0.35`, `MIN_LEAF_TOKENS=64`, provider keys.
 
 ## 12. Observability (interviewers probe this)
 
