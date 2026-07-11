@@ -1,0 +1,17 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Mission-control base (spec §2.2). */
+@layer base {
+  body {
+    @apply bg-background text-text font-sans antialiased;
+  }
+
+  /* Signature detail: clause IDs, standard codes, and scores render in mono. */
+  .clause-id,
+  .standard-code,
+  .score {
+    @apply font-mono;
+  }
+}
