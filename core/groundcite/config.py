@@ -34,6 +34,14 @@ class Settings(BaseSettings):
     embedding_provider: EmbeddingProviderName = "bge_m3"
     llm_provider: LLMProviderName = "groq"
     reranker_enabled: bool = True
+    # Local bge-m3 model name (spec §11 default; spec §17 rule 9: never hardcode
+    # model names outside config defaults). Used by the bge_m3_embed and
+    # bge_m3_tokencount adapters, wired in container.py.
+    embedding_model: str = "BAAI/bge-m3"
+    # Skip real embeddings for dry runs (spec task 2e). When true the container
+    # wires a zero-vector FakeEmbedder so chunks.embedding (NOT NULL) still has a
+    # 1024-d vector; retrieval is meaningless but the ingest path is exercised.
+    skip_embeddings: bool = False
 
     # --- provider credentials / endpoints ---
     openai_api_key: str | None = None
@@ -47,6 +55,11 @@ class Settings(BaseSettings):
     candidates_lexical: int = 30
     fused_k: int = 20
     context_k: int = 6
+
+    # --- ingestion tunables (spec §6 step 3) ---
+    # A leaf clause with no children and token_count < MIN_LEAF_TOKENS merges up
+    # into its parent's chunk (spec §6.1 #5). Configurable — standards vary.
+    min_leaf_tokens: int = 64
 
 
 @lru_cache
