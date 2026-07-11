@@ -107,12 +107,42 @@ class EvalCase(_Frozen):
     language: str = "en"
 
 
+class ParsedBlock(_Frozen):
+    """One text block/line extracted from a PDF page, with the layout signals
+    structure detection needs (spec §6 step 1: "text blocks + page numbers +
+    font-size/bold signals"). A heading line like ``§ 25.1309 Equipment...``
+    becomes one ParsedBlock so the CFR regex can match a single line in context.
+    """
+
+    text: str
+    page_number: int
+    font_size: float | None = None
+    is_bold: bool = False
+
+
 class ParsedPage(_Frozen):
-    """Raw output of the DocumentParser port: one PDF page's text-layer content
-    plus the layout signals structure detection needs (spec §6 step 1).
+    """One PDF page of the DocumentParser output: an ordered sequence of blocks
+    (spec §6 step 1). Block order within a page is the parser's reading order;
+    page order across the document is ascending ``page_number``.
     """
 
     page_number: int
-    text: str
-    max_font_size: float | None = None
-    has_bold: bool = False
+    blocks: tuple[ParsedBlock, ...] = ()
+
+
+class ParsedDocument(_Frozen):
+    """Whole-output of the DocumentParser port (spec §6 type seam).
+
+    The parser fills only ``pages`` — it reads only the PDF and knows nothing of
+    the document's DB identity or standard code. ``IngestionService`` enriches
+    ``document_id`` / ``standard_code`` / ``title`` (via ``model_copy``) AFTER
+    upserting the ``Document`` and BEFORE calling ``StructureDetector.detect``
+    and ``Chunker.chunk``: ``detect`` needs ``document_id`` to populate Section
+    rows (§5 ``sections.document_id`` is NOT NULL) and ``chunk`` needs
+    ``standard_code`` to build the breadcrumb header (§6 step 3).
+    """
+
+    pages: tuple[ParsedPage, ...]
+    document_id: UUID | None = None
+    standard_code: str | None = None
+    title: str | None = None

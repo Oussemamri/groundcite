@@ -7,7 +7,7 @@ config. Types only — no bodies, no ``Any`` (spec §17 rule 5).
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 from uuid import UUID
@@ -17,7 +17,7 @@ from groundcite.domain.entities import (
     Chunk,
     Document,
     EvalCase,
-    ParsedPage,
+    ParsedDocument,
     Section,
 )
 from groundcite.domain.results import EvalRun
@@ -25,6 +25,12 @@ from groundcite.domain.results import EvalRun
 # A dense embedding vector. Dimension is fixed at 1024 (bge-m3) and locked —
 # changing it means a full re-embed (spec §5, §11, prep task P4).
 type Vector = tuple[float, ...]
+
+# Raw text span per Section, keyed by Section.id (spec §6 type seam). Kept out
+# of the Section domain entity (Section stays a pure tree node matching the
+# ``sections`` table 1:1) — the parallel-text-map seam between structure
+# detection and chunking.
+type SectionTextMap = Mapping[UUID, str]
 
 
 @runtime_checkable
@@ -83,16 +89,61 @@ class LexicalIndex(Protocol):
 
 @runtime_checkable
 class DocumentParser(Protocol):
-    """Extracts text + layout signals from a text-layer PDF (spec §6 step 1)."""
+    """Extracts text + layout signals from a text-layer PDF (spec §6 step 1).
 
-    def parse(self, pdf_path: Path) -> list[ParsedPage]: ...
+    Output is a single ``ParsedDocument`` whose ``pages`` carry ordered text
+    blocks with font-size/bold signals. Both the PyMuPDF (lite/CI) and Docling
+    (default) adapters share this shape and one contract test (spec §6 step 1).
+    """
+
+    def parse(self, pdf_path: Path) -> ParsedDocument: ...
+
+
+@runtime_checkable
+class StructureDetector(Protocol):
+    """Builds the Section clause tree from a parsed document (spec §6 step 2).
+
+    NOT a private step inside the parser and NOT inlined in the chunker (spec §6
+    binding): it must be fake-testable per CLAUDE rule 3 without a real PDF, and
+    organization-specific numbering (FAA/EASA CFR-style ``§ 25.1309``,
+    ``(a)(1)(i)`` vs. ECSS/NASA numeric hierarchy) must be swappable per
+    ``documents.organization``. Returns the Section tree for persistence PLUS a
+    parallel ``SectionTextMap`` giving the chunker raw text per section.
+    """
+
+    def detect(self, doc: ParsedDocument) -> tuple[list[Section], SectionTextMap]: ...
 
 
 @runtime_checkable
 class Chunker(Protocol):
-    """Clause-aware chunking with breadcrumb headers (spec §6 step 3)."""
+    """Clause-aware chunking with breadcrumb headers (spec §6 step 3).
 
-    def chunk(self, document: Document, sections: Sequence[Section]) -> list[Chunk]: ...
+    Signature is binding (spec §6 type seam / §6.1 #1): the chunker consumes the
+    parsed document, the Section tree, the parallel section-text map, and an
+    injected ``count_tokens`` callable. It NEVER imports an embedding library
+    directly — token counting is injected so swapping the embedding provider
+    swaps the token counter in lockstep, wired once in ``container.py``.
+    """
+
+    def chunk(
+        self,
+        doc: ParsedDocument,
+        sections: Sequence[Section],
+        section_text: SectionTextMap,
+        count_tokens: Callable[[str], int],
+    ) -> list[Chunk]: ...
+
+
+@runtime_checkable
+class TokenCounter(Protocol):
+    """Counts tokens with the configured embedder's tokenizer (spec §6 §6.1 #4).
+
+    Uses the target embedder's own tokenizer as the token-count source of truth
+    so chunk size limits stay accurate for whichever embedder is active. Wired by
+    ``container.py`` and injected into the Chunker as ``count_tokens``.
+    """
+
+    def count(self, text: str) -> int: ...
 
 
 @runtime_checkable

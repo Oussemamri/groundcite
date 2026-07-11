@@ -11,6 +11,8 @@ from groundcite.domain.entities import (
     Chunk,
     Document,
     EvalCase,
+    ParsedBlock,
+    ParsedDocument,
     ParsedPage,
     Section,
 )
@@ -42,6 +44,8 @@ __all__ = [
     "EvalCase",
     "EvalResult",
     "EvalRun",
+    "ParsedBlock",
+    "ParsedDocument",
     "ParsedPage",
     "RetrievedChunk",
     "Section",

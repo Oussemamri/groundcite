@@ -14,6 +14,9 @@ from groundcite.ports.protocols import (
     LLMProvider,
     Repository,
     Reranker,
+    SectionTextMap,
+    StructureDetector,
+    TokenCounter,
     Vector,
     VectorIndex,
 )
@@ -26,6 +29,9 @@ __all__ = [
     "LexicalIndex",
     "Repository",
     "Reranker",
+    "SectionTextMap",
+    "StructureDetector",
+    "TokenCounter",
     "Vector",
     "VectorIndex",
 ]

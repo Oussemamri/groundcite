@@ -16,6 +16,19 @@ dependencies = [
     "structlog>=24.4",
 ]
 
+# Optional Extras (spec §11.1 build-vs-buy; §6 step 1). CI installs NONE by
+# default (`uv sync --frozen`), so adapters must import these lazily.
+[project.optional-dependencies]
+# `pip install groundcite[pdf]` — the lite/CI parser (spec §6 step 1).
+pdf = ["pymupdf>=1.25,<2"]
+# `pip install groundcite[embed]` — local bge-m3 embedding (spec §11 default).
+# transformers provides just the tokenizer for bge_m3_tokencount (cheap); the
+# FlagEmbedding model itself is the heavy dep. Both pinned (spec §17 rule 12).
+embed = [
+    "FlagEmbedding>=1.3,<2",
+    "transformers>=4.45,<5",
+]
+
 [project.scripts]
 groundcite = "groundcite.cli:app"
 
