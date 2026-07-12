@@ -15,7 +15,7 @@ from typing import Any
 from groundcite.ports.protocols import Vector
 
 try:  # pragma: no cover - exercised only when the embed extra is installed
-    from FlagEmbedding import BGEM3FlagModel  # type: ignore[import-untyped]
+    from FlagEmbedding import BGEM3FlagModel  # type: ignore[import]
 except ImportError:  # pragma: no cover
     BGEM3FlagModel = None
 
