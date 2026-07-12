@@ -18,9 +18,12 @@ from groundcite.adapters.embedding.bge_m3_embed import make_bge_m3_embedder, mak
 from groundcite.adapters.parser.pymupdf_parser import make_pymupdf_parser
 from groundcite.adapters.repository.pg_repo import make_pg_repository
 from groundcite.adapters.structure.cfr_structure import make_cfr_structure_detector
-from groundcite.adapters.tokencount.bge_m3_tokencount import make_bge_m3_token_counter
+from groundcite.adapters.tokencount.bge_m3_tokencount import (
+    make_bge_m3_token_counter,
+    make_whitespace_token_counter,
+)
 from groundcite.config import Settings
-from groundcite.ports.protocols import EmbeddingProvider
+from groundcite.ports.protocols import EmbeddingProvider, TokenCounter
 from groundcite.services import (
     AskService,
     EvalService,
@@ -45,7 +48,15 @@ def build_services(settings: Settings) -> Services:
     parser = make_pymupdf_parser()
     detector = make_cfr_structure_detector()
     chunker = make_clause_chunker(min_leaf_tokens=settings.min_leaf_tokens)
-    token_counter = make_bge_m3_token_counter(model_name=settings.embedding_model)
+
+    # SKIP_EMBEDDINGS = a true no-model dry run: zero-vector embeddings AND a
+    # no-dependency whitespace token counter, so the pipeline runs without the
+    # embed extra. Production uses the real bge-m3 tokenizer in lockstep.
+    token_counter: TokenCounter
+    if settings.skip_embeddings:
+        token_counter = make_whitespace_token_counter()
+    else:
+        token_counter = make_bge_m3_token_counter(model_name=settings.embedding_model)
 
     # Embedding: real bge-m3, or zero-vector dry-run when SKIP_EMBEDDINGS.
     embedder: EmbeddingProvider

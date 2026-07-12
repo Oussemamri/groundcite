@@ -78,6 +78,22 @@ module = "groundcite.adapters.*"
 disallow_untyped_defs = false
 disallow_incomplete_defs = false
 
+# Heavy optional-extra adapters (FlagEmbedding / transformers / PyMuPDF): these
+# third-party packages ship no py.typed stubs. The ignore settings below are
+# chosen so mypy passes in BOTH install states — CI (uv sync --frozen, no extras)
+# AND local dev with the pdf/embed extras installed. The inline `# type: ignore`
+# markers are kept per-line so the unused-ignore relaxation is explicit only
+# where the partial-stub presence flips the code's type-check outcome.
+[[tool.mypy.overrides]]
+module = [
+    "groundcite.adapters.embedding.bge_m3_embed",
+    "groundcite.adapters.tokencount.bge_m3_tokencount",
+    "groundcite.adapters.parser.pymupdf_parser",
+]
+ignore_missing_imports = true
+disallow_untyped_calls = false
+warn_unused_ignores = false
+
 # ----------------------------------------------------------------------------
 # import-linter — enforces the §4 dependency rule:
 #   domain ← ports ← services / adapters ← apps.  Core never imports an adapter.

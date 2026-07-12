@@ -123,9 +123,11 @@ class IngestionService:
             if b.text and not _PURE_PAGE_NUM_RE.match(b.text)
         )
         # Attached text = everything the detector attached to a section (header
-        # lines + body). The detector already RAISED if this / total (excluding
+        # lines + body), counted WITHOUT the "\n" separators the detector joins
+        # blocks with, so it compares apples-to-apples with total_chars (block
+        # text lengths). The detector already RAISED if this / total (excluding
         # recognized page-number/running-header noise) fell below 90%.
-        attached_chars = sum(len(v) for v in section_text.values())
+        attached_chars = sum(len(v.replace("\n", "")) for v in section_text.values())
         orphan_pct = 0.0 if total_chars == 0 else 1.0 - attached_chars / total_chars
         attached_pct = 0.0 if total_chars == 0 else min(1.0, attached_chars / total_chars)
 

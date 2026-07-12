@@ -50,3 +50,19 @@ class BgeM3TokenCounter:
 def make_bge_m3_token_counter(model_name: str = "BAAI/bge-m3") -> BgeM3TokenCounter:
     """Container factory (spec §4 wiring seam)."""
     return BgeM3TokenCounter(model_name=model_name)
+
+
+class WhitespaceTokenCounter:
+    """No-dependency token counter for dry runs (SKIP_EMBEDDINGS). Whitespace
+    split is a coarse stand-in for the bge-m3 tokenizer so the ingest pipeline
+    can be exercised without configuring the real tokenizer/model. NOT a
+    production counter — chunk sizes differ slightly from the real tokenizer.
+    """
+
+    def count(self, text: str) -> int:
+        return len(text.split())
+
+
+def make_whitespace_token_counter() -> WhitespaceTokenCounter:
+    """Container factory for the SKIP_EMBEDDINGS dry-run path."""
+    return WhitespaceTokenCounter()
