@@ -18,3 +18,9 @@
 9. Secrets only via config.py/pydantic-settings. Never hardcode model names
    outside config defaults.
 10. When unsure between clever and boring: boring.
+11. Build-vs-buy boundary (spec §11.1) is law: NEVER add LangChain, LlamaIndex,
+    Haystack, or any RAG framework. Allowed libs: docling, flagembedding,
+    rerankers, ragas (judge metrics only), sse-starlette, pgvector. Anything
+    new goes through a spec §11 table update first.
+12. Pin every dependency version. Judge model name lives in config and is
+    snapshotted into every eval run.
