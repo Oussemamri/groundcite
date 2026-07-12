@@ -24,3 +24,5 @@
     new goes through a spec §11 table update first.
 12. Pin every dependency version. Judge model name lives in config and is
     snapshotted into every eval run.
+13. Never create or modify files under evals/suites/ unless explicitly
+    instructed in the current task. That directory is human-owned (P2).
