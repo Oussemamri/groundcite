@@ -33,15 +33,26 @@ attached to the open section, never a section boundary. Clause-id uniqueness
 remains as a second guard: a bold header whose clause_id already exists is a
 repeat and does not open a new section. The parser stays a dumb extractor;
 noise lives here.
+
+Likewise a ``Subpart X—Title`` match is a header only with display typography:
+bold, or a font size LARGER than the document's modal (body) size. The
+table of contents repeats every Subpart line at body size — matching those
+would open all nine subparts up front and leave the LAST one on the stack, so
+every real section would nest under it (the far-25 "everything under Subpart I"
+bug). Headings also wrap in the narrow govinfo columns; blocks that follow a
+just-opened heading with the SAME typography and match no header pattern are
+title continuations ("Subpart G—Operating Limitations" / "and Information",
+"§ 25.1309" / "Equipment, systems, and in-" / "stallations."), merged into the
+section title with print-hyphenation ("in-" + "stallations") joined.
 """
 
 from __future__ import annotations
 
 import re
-from collections import defaultdict
+from collections import Counter, defaultdict
 from uuid import UUID, uuid4
 
-from groundcite.domain.entities import ParsedDocument, Section
+from groundcite.domain.entities import ParsedBlock, ParsedDocument, Section
 from groundcite.ports.protocols import SectionTextMap, StructureDetector
 
 # Header regexes (operate on a single block's text, at line start).
@@ -112,6 +123,13 @@ class CfrStructureDetector(StructureDetector):
         attached_chars = 0
         total_chars = 0
 
+        modal_size = _modal_font_size(doc)
+        # Wrapped-heading continuation state: id of the section whose heading
+        # may continue on the next block, and the typography of the heading's
+        # first block (continuation lines share it exactly).
+        title_open: UUID | None = None
+        title_sig: tuple[float | None, bool] | None = None
+
         for page in doc.pages:
             for block in page.blocks:
                 text = block.text.rstrip()
@@ -122,6 +140,7 @@ class CfrStructureDetector(StructureDetector):
                 # excluded from the 90% accounting: it is structural we
                 # deliberately dropped, not "orphan text we couldn't account for".
                 if _PURE_PAGE_NUM_RE.match(text):
+                    title_open = None
                     continue
 
                 subpart = _SUBPART_RE.match(text)
@@ -131,9 +150,32 @@ class CfrStructureDetector(StructureDetector):
                     # bare number ⇒ page running head (recognized noise),
                     # trailing prose ⇒ wrapped in-body cross-reference (body).
                     if section_m.group(2).strip() in ("", "."):
+                        title_open = None
                         continue
                     section_m = None
+                if subpart is not None and not _is_display_heading(block, modal_size):
+                    # Body-size Subpart line ⇒ the table-of-contents copy, not
+                    # a section boundary (see module docstring).
+                    subpart = None
                 chain = self._match_paren_chain(text, stack)
+
+                if (
+                    title_open is not None
+                    and subpart is None
+                    and section_m is None
+                    and chain is None
+                    and stack
+                    and stack[-1].id == title_open
+                    and (block.font_size, block.is_bold) == title_sig
+                ):
+                    # Same-typography non-header block right after a heading:
+                    # the wrapped remainder of that heading's title.
+                    self._extend_title(stack, sections, clause_to_section, text)
+                    text_map[stack[-1].id] += text + "\n"
+                    total_chars += len(text)
+                    attached_chars += len(text)
+                    continue
+                title_open = None
 
                 if subpart is not None:
                     clause_id = f"Subpart {subpart.group(1)}"
@@ -148,6 +190,8 @@ class CfrStructureDetector(StructureDetector):
                         next_ordinal,
                         document_id,
                     )
+                    title_open = sections[-1].id
+                    title_sig = (block.font_size, block.is_bold)
                     text_map[sections[-1].id] += text + "\n"
                     total_chars += len(text)
                     attached_chars += len(text)
@@ -165,6 +209,8 @@ class CfrStructureDetector(StructureDetector):
                         next_ordinal,
                         document_id,
                     )
+                    title_open = sections[-1].id
+                    title_sig = (block.font_size, block.is_bold)
                     text_map[sections[-1].id] += text + "\n"
                     total_chars += len(text)
                     attached_chars += len(text)
@@ -202,6 +248,33 @@ class CfrStructureDetector(StructureDetector):
         return sections, text_map
 
     # --- header opening ---------------------------------------------------
+
+    @staticmethod
+    def _extend_title(
+        stack: list[Section],
+        sections: list[Section],
+        clause_to_section: dict[str, Section],
+        fragment: str,
+    ) -> None:
+        """Merge a wrapped-heading continuation line into the just-opened
+        section's title. ``Section`` is frozen, so the object is replaced in
+        every registry that holds it. A trailing ``-`` on the accumulated title
+        is print hyphenation: join without a space ("in-" + "stallations.")."""
+        old = stack[-1]
+        base = old.title or ""
+        if base.endswith("-"):
+            merged = base[:-1] + fragment
+        elif base:
+            merged = f"{base} {fragment}"
+        else:
+            merged = fragment
+        new = old.model_copy(update={"title": merged.rstrip(".")})
+        stack[-1] = new
+        clause_to_section[new.clause_id] = new
+        for i in range(len(sections) - 1, -1, -1):
+            if sections[i].id == new.id:
+                sections[i] = new
+                break
 
     @staticmethod
     def _open(
@@ -383,6 +456,29 @@ class CfrStructureDetector(StructureDetector):
         if cur_level == 5 and len(label) == 1 and label.isupper():
             return 6
         return None
+
+
+def _modal_font_size(doc: ParsedDocument) -> float | None:
+    """The document's dominant (modal) font size — the body-text size. Subpart
+    headings must print larger than this (or bold) to count as headings; the
+    table of contents repeats them at body size (see module docstring)."""
+    sizes = Counter(
+        block.font_size
+        for page in doc.pages
+        for block in page.blocks
+        if block.font_size is not None and block.text.strip()
+    )
+    if not sizes:
+        return None
+    return sizes.most_common(1)[0][0]
+
+
+def _is_display_heading(block: ParsedBlock, modal_size: float | None) -> bool:
+    """Typography gate for display headings (Subpart lines): bold, or set
+    larger than the modal body size."""
+    if block.is_bold:
+        return True
+    return block.font_size is not None and modal_size is not None and block.font_size > modal_size
 
 
 def make_cfr_structure_detector() -> CfrStructureDetector:

@@ -27,6 +27,12 @@ def _h(text: str) -> ParsedBlock:
     return ParsedBlock(text=text, page_number=1, font_size=8.0, is_bold=True)
 
 
+def _big(text: str) -> ParsedBlock:
+    """A display heading set larger than body size but not bold — how govinfo
+    prints Subpart headings (10pt over an 8pt body)."""
+    return ParsedBlock(text=text, page_number=1, font_size=10.0, is_bold=False)
+
+
 def _doc(
     blocks_per_page: list[list[str | ParsedBlock]], document_id: UUID | None = None
 ) -> ParsedDocument:
@@ -243,3 +249,63 @@ def test_page_top_running_head_does_not_preempt_the_real_heading() -> None:
     matches = [s for s in sections if s.clause_id == "25.1309"]
     assert len(matches) == 1
     assert matches[0].title == "Equipment"
+
+
+def test_toc_subpart_lines_do_not_open_sections() -> None:
+    """Bug seen on far-25: the table of contents repeats every Subpart line at
+    body size. Those matched the Subpart regex, opened all subparts up front,
+    and left the LAST one on the stack — so every real section nested under
+    'Subpart I — Special Federal Aviation'. Only display typography (larger
+    than the modal body size, or bold) may open a Subpart."""
+    did = uuid4()
+    body = "(a) This part prescribes airworthiness standards for transport category airplanes. " * 8
+    parsed = _doc(
+        [
+            [
+                "Subpart A—General",  # TOC copy: body size ⇒ not a header
+                "Subpart I—Special Federal",  # TOC copy: body size ⇒ not a header
+                _big("Subpart A—General"),  # real display heading (10pt > 8pt body)
+                _h("§ 25.1 Applicability."),
+                body,
+            ]
+        ],
+        document_id=did,
+    )
+    sections, _ = CfrStructureDetector().detect(parsed)
+    level1 = [s for s in sections if s.level == 1]
+    assert [s.clause_id for s in level1] == ["Subpart A"], "only the display heading opens"
+    sec = next(s for s in sections if s.clause_id == "25.1")
+    assert sec.parent_id == level1[0].id, "sections must nest under their true subpart"
+    assert not any(s.clause_id == "Subpart I" for s in sections)
+
+
+def test_wrapped_heading_titles_continue_across_blocks() -> None:
+    """govinfo headings wrap in narrow columns: 'Subpart G—Operating
+    Limitations' / 'and Information' (both 10pt), and '§ 25.1309' /
+    'Equipment, systems, and in-' / 'stallations.' (all bold). Continuation
+    blocks share the heading's typography and merge into its title, honoring
+    print hyphenation."""
+    did = uuid4()
+    body = "(a) Each operating limitation must be furnished as specified in this subpart. " * 4
+    parsed = _doc(
+        [
+            [
+                _big("Subpart G—Operating Limitations"),
+                _big("and Information"),
+                _h("§ 25.1309"),
+                _h("Equipment, systems, and in-"),
+                _h("stallations."),
+                body,
+            ]
+        ],
+        document_id=did,
+    )
+    sections, text = CfrStructureDetector().detect(parsed)
+    sub = next(s for s in sections if s.level == 1)
+    assert sub.title == "Operating Limitations and Information"
+    sec = next(s for s in sections if s.clause_id == "25.1309")
+    assert sec.title == "Equipment, systems, and installations"
+    assert sec.parent_id == sub.id
+    # Body prose after the heading run is NOT part of the title.
+    a = next(s for s in sections if s.clause_id == "25.1309(a)")
+    assert "operating limitation" in text[a.id]
