@@ -28,6 +28,10 @@ embed = [
     "FlagEmbedding>=1.3,<2",
     "transformers>=4.45,<5",
 ]
+# `pip install groundcite[rerank]` — the cross-encoder rerank stage (spec §7
+# step 3). The Reranker port wraps AnswerDotAI's `rerankers` (spec §11 table);
+# heavy (pulls torch), so it stays an extra and the adapter imports it lazily.
+rerank = ["rerankers>=0.6,<1"]
 
 [project.scripts]
 groundcite = "groundcite.cli:app"

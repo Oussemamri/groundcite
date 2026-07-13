@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     # model names outside config defaults). Used by the bge_m3_embed and
     # bge_m3_tokencount adapters, wired in container.py.
     embedding_model: str = "BAAI/bge-m3"
+    # Cross-encoder reranker model (spec §11 default). Used by the bge_reranker
+    # adapter; scores are normalized so they feed TAU_RETRIEVAL directly (§11).
+    reranker_model: str = "BAAI/bge-reranker-v2-m3"
     # Skip real embeddings for dry runs (spec task 2e). When true the container
     # wires a zero-vector FakeEmbedder so chunks.embedding (NOT NULL) still has a
     # 1024-d vector; retrieval is meaningless but the ingest path is exercised.

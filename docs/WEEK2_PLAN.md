@@ -93,11 +93,18 @@ Expect it in the eval breakdown; do not silently "fix" it inside Week 2.
 
 | Lib | Why | Rule-11 status |
 |---|---|---|
-| `pgvector` | psycopg vector type registration; steal its hybrid-search SQL shapes (§11.1) | **explicitly allowed** |
 | `rerankers` | the Reranker port wraps it (§11 table) | **explicitly allowed** |
 
-Both go in optional extras (`[rerank]`), lazily imported, so CI stays dependency-free.
+**Exactly one** new dependency, in an optional extra (`[rerank]`), lazily
+imported, so CI stays dependency-free.
 **No RAG framework. No LangChain/LlamaIndex/Haystack** (rule 11).
+
+**`pgvector-python` considered and rejected.** It is on the §11.1 allow-list, but
+the allow-list is permission, not obligation: `pg_repo` already writes embeddings
+with a zero-dependency pgvector text literal (`_embedding_literal`), and the
+dense query needs only the same representation plus a `::vector` cast. Adding a
+library to duplicate a working helper fails rule 0 (simplicity, match existing
+style) and buys nothing. The dense adapter reuses the same literal format.
 
 ---
 
