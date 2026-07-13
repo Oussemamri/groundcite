@@ -15,6 +15,7 @@ from dataclasses import dataclass
 
 from groundcite.adapters.chunker.clause_chunker import make_clause_chunker
 from groundcite.adapters.embedding.bge_m3_embed import make_bge_m3_embedder, make_zero_embedder
+from groundcite.adapters.evalsuite.jsonl_suite import make_jsonl_suite_loader
 from groundcite.adapters.lexical.pg_lexical import make_pg_lexical_index
 from groundcite.adapters.parser.pymupdf_parser import make_pymupdf_parser
 from groundcite.adapters.repository.pg_repo import make_pg_repository
@@ -79,6 +80,18 @@ def build_services(settings: Settings) -> Services:
         make_bge_reranker(model_name=settings.reranker_model) if settings.reranker_enabled else None
     )
 
+    ask = AskService(
+        embedder=embedder,
+        vector_index=vector_index,
+        lexical_index=lexical_index,
+        reranker=reranker,
+        rrf_k=settings.rrf_k,
+        candidates_dense=settings.candidates_dense,
+        candidates_lexical=settings.candidates_lexical,
+        fused_k=settings.fused_k,
+        context_k=settings.context_k,
+    )
+
     return Services(
         ingestion=IngestionService(
             parser=parser,
@@ -88,17 +101,13 @@ def build_services(settings: Settings) -> Services:
             token_counter=token_counter,
             repository=repository,
         ),
-        ask=AskService(
-            embedder=embedder,
-            vector_index=vector_index,
-            lexical_index=lexical_index,
-            reranker=reranker,
-            rrf_k=settings.rrf_k,
-            candidates_dense=settings.candidates_dense,
-            candidates_lexical=settings.candidates_lexical,
-            fused_k=settings.fused_k,
-            context_k=settings.context_k,
+        ask=ask,
+        # EvalService scores AskService.retrieve directly — no LLM, no judge
+        # (spec §8 retrieval-only metrics, §15.1). Suite loading is injected as
+        # a callable, the same seam as the Chunker's count_tokens (§6.1 #4).
+        evals=EvalService(
+            ask=ask,
+            load_suite=make_jsonl_suite_loader(settings.eval_suites_dir),
         ),
-        evals=EvalService(),
         library=LibraryService(),
     )

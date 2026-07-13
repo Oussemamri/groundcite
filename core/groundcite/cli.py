@@ -8,14 +8,21 @@ it builds services via ``container.build_services`` and calls them.
 
 from __future__ import annotations
 
+import json as json_lib
+import subprocess
 from pathlib import Path
 
 import typer
 
+from groundcite.adapters.evalsuite.jsonl_suite import SuiteNotFoundError
 from groundcite.config import get_settings
 from groundcite.container import build_services
 from groundcite.domain.entities import DocumentMeta
-from groundcite.domain.results import IngestionReport, RetrievalResult
+from groundcite.domain.results import (
+    IngestionReport,
+    RetrievalEvalReport,
+    RetrievalResult,
+)
 
 app = typer.Typer(
     name="groundcite",
@@ -142,9 +149,132 @@ def _snippet(content: str, width: int = 88) -> str:
 
 
 @eval_app.command("run")
-def eval_run(suite: str = typer.Option("core", help="Suite name, e.g. core")) -> None:
-    """Run an eval Suite and write a report (spec §8)."""
-    raise typer.Exit(_exit_stub("eval run"))
+def eval_run(
+    suite: str = typer.Option("core", help="Suite name, e.g. core"),
+    slug: list[str] = typer.Option(None, "--slug", help="Restrict retrieval to document slug(s)"),
+    rerank: bool = typer.Option(
+        None, "--rerank/--no-rerank", help="Override RERANKER_ENABLED for this run"
+    ),
+    write_report: bool = typer.Option(
+        True, "--write-report/--no-write-report", help="Write evals/reports/<sha>.md (spec §8)"
+    ),
+) -> None:
+    """Run an eval Suite and write a report (spec §8).
+
+    Week 2 is RETRIEVAL-ONLY (spec §15.1): recall@5 / recall@10 / MRR, computed
+    with no LLM and no judge. Faithfulness and citation precision arrive in Week 3.
+    """
+    settings = get_settings()
+    if rerank is not None:
+        settings = settings.model_copy(update={"reranker_enabled": rerank})
+
+    services = build_services(settings)
+    git_sha = _git_sha()
+    config_snapshot: dict[str, object] = {
+        "embedding_model": settings.embedding_model,
+        "reranker_enabled": settings.reranker_enabled,
+        "reranker_model": settings.reranker_model if settings.reranker_enabled else None,
+        "rrf_k": settings.rrf_k,
+        "candidates_dense": settings.candidates_dense,
+        "candidates_lexical": settings.candidates_lexical,
+        "fused_k": settings.fused_k,
+        "context_k": settings.context_k,
+    }
+
+    try:
+        report = services.evals.run_retrieval(
+            suite,
+            git_sha=git_sha,
+            document_slugs=slug or None,
+            config=config_snapshot,
+        )
+    except SuiteNotFoundError as exc:
+        typer.secho(str(exc), fg=typer.colors.RED, err=True)
+        raise typer.Exit(2) from exc
+
+    typer.echo(_format_eval(report))
+    if write_report:
+        path = _write_eval_report(report, settings.eval_reports_dir)
+        typer.echo(f"\nreport written: {path}")
+
+
+def _format_eval(r: RetrievalEvalReport) -> str:
+    rerank_note = "on" if r.reranked else "off"
+    lines = [
+        f"Retrieval eval — suite '{r.suite}' (spec §8, retrieval-only)",
+        "=" * 60,
+        f"git sha        : {r.git_sha}",
+        f"reranker       : {rerank_note}",
+        f"scored cases   : {r.scored_cases}",
+        f"must-abstain   : {r.must_abstain_cases}  (not scored here — Gate A is Week 3)",
+        "",
+        f"{'metric':<14} {'value':>8}",
+        f"{'-' * 14} {'-' * 8}",
+        f"{'recall@5':<14} {r.recall_at_5:>8.3f}",
+        f"{'recall@10':<14} {r.recall_at_10:>8.3f}",
+        f"{'MRR':<14} {r.mrr:>8.3f}",
+        "",
+        "misses (recall@10 = 0):",
+    ]
+    misses = [
+        c for c in r.cases if not c.must_abstain and c.expected_clauses and not c.recall_at_10
+    ]
+    if not misses:
+        lines.append("  (none)")
+    for case in misses:
+        lines.append(f"  expected {', '.join(case.expected_clauses):<22} {case.question[:60]}")
+    return "\n".join(lines)
+
+
+def _write_eval_report(r: RetrievalEvalReport, reports_dir: Path) -> Path:
+    """Write evals/reports/<sha>.md (spec §8 run mechanics)."""
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    path = reports_dir / f"{r.git_sha}-{r.suite}-retrieval.md"
+    lines = [
+        f"# Retrieval eval — `{r.suite}` @ `{r.git_sha}`",
+        "",
+        "Retrieval-only (spec §8 / §15.1): recall@k and MRR, no judge, no LLM.",
+        "",
+        "| metric | value |",
+        "|---|---|",
+        f"| recall@5 | {r.recall_at_5:.3f} |",
+        f"| recall@10 | {r.recall_at_10:.3f} |",
+        f"| MRR | {r.mrr:.3f} |",
+        f"| scored cases | {r.scored_cases} |",
+        f"| must-abstain cases (unscored) | {r.must_abstain_cases} |",
+        "",
+        "## Config snapshot",
+        "",
+        "```json",
+        json_lib.dumps(r.config, indent=2, sort_keys=True),
+        "```",
+        "",
+        "## Per-case",
+        "",
+        "| # | expected | hit rank | r@5 | r@10 | question |",
+        "|---|---|---|---|---|---|",
+    ]
+    for i, c in enumerate((x for x in r.cases if not x.must_abstain), 1):
+        hit = str(c.first_hit_rank) if c.first_hit_rank else "—"
+        lines.append(
+            f"| {i} | `{', '.join(c.expected_clauses)}` | {hit} | "
+            f"{c.recall_at_5:.2f} | {c.recall_at_10:.2f} | {c.question[:70]} |"
+        )
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
+
+
+def _git_sha() -> str:
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return out.stdout.strip() or "unknown"
+    except (OSError, subprocess.CalledProcessError):  # pragma: no cover
+        return "unknown"
 
 
 @eval_app.command("report")

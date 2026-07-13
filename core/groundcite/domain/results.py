@@ -146,6 +146,48 @@ class EvalResult(_Frozen):
     debug: dict[str, object] = Field(default_factory=dict)
 
 
+class RetrievalCaseResult(_Frozen):
+    """Per-Case retrieval score (spec §8 "we need per-case debug detail").
+
+    ``must_abstain`` cases carry no expected clauses, so recall/MRR are not
+    meaningful for them and they are excluded from the suite means. Their
+    ``top_score`` is still recorded: the gap between the best score a
+    must-abstain case reaches and the worst score a grounded case reaches is
+    exactly the evidence needed to set τ_retrieval for Gate A (Week 3).
+    """
+
+    case_id: UUID
+    question: str
+    language: str
+    must_abstain: bool
+    expected_clauses: tuple[str, ...]
+    retrieved_clauses: tuple[str, ...]
+    recall_at_5: float
+    recall_at_10: float
+    reciprocal_rank: float
+    first_hit_rank: int | None = None
+    top_score: float | None = None
+
+
+class RetrievalEvalReport(_Frozen):
+    """Suite-level retrieval baseline (spec §8, §15.1 — no judge, no LLM).
+
+    Means are taken over SCORABLE cases only (those with expected clauses);
+    ``must_abstain_cases`` is reported separately.
+    """
+
+    suite: str
+    git_sha: str
+    reranked: bool
+    scored_cases: int
+    must_abstain_cases: int
+    recall_at_5: float
+    recall_at_10: float
+    mrr: float
+    cases: tuple[RetrievalCaseResult, ...] = ()
+    config: dict[str, object] = Field(default_factory=dict)
+
+
 class IngestionReport(_Frozen):
     """Result of one IngestionService.ingest run (spec §6 step 5).
 

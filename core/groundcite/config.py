@@ -9,12 +9,17 @@ importing config. Every variable here mirrors ``.env.example``.
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 EmbeddingProviderName = Literal["bge_m3", "openai"]
 LLMProviderName = Literal["groq", "openai", "ollama"]
+
+# config.py -> groundcite/ -> core/ -> repo root. Derived (not a cwd-relative
+# path) so `groundcite eval run` finds the committed suites from any directory.
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 class Settings(BaseSettings):
@@ -58,6 +63,12 @@ class Settings(BaseSettings):
     candidates_lexical: int = 30
     fused_k: int = 20
     context_k: int = 6
+
+    # --- evals (spec §8) ---
+    # The human-owned golden set (prep task P2; CLAUDE.md rule 13 — read, never
+    # written by code) and where `eval run` writes its report (spec §8).
+    eval_suites_dir: Path = _REPO_ROOT / "evals" / "suites"
+    eval_reports_dir: Path = _REPO_ROOT / "evals" / "reports"
 
     # --- ingestion tunables (spec §6 step 3) ---
     # A leaf clause with no children and token_count < MIN_LEAF_TOKENS merges up

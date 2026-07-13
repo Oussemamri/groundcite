@@ -75,6 +75,11 @@ ignore = ["RUF001", "RUF002", "RUF003"]
 [tool.ruff.lint.isort]
 known-first-party = ["groundcite"]
 
+# Typer declares CLI options as argument defaults — that is its API, and the
+# objects are immutable descriptors, not the mutable default B008 guards against.
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["typer.Option", "typer.Argument"]
+
 # ----------------------------------------------------------------------------
 # mypy — strict on core (domain / ports / services), relaxed on adapter stubs
 # whose third-party deps arrive later (spec §4.1, §17 rule 5).
