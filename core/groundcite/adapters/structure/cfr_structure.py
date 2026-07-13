@@ -44,6 +44,19 @@ just-opened heading with the SAME typography and match no header pattern are
 title continuations ("Subpart G—Operating Limitations" / "and Information",
 "§ 25.1309" / "Equipment, systems, and in-" / "stallations."), merged into the
 section title with print-hyphenation ("in-" + "stallations") joined.
+
+APPENDICES are the third top-level structure. Part 25's appendices carry no
+"§ x.y" heading at all, so without this rule ALL of their text (22.8% of the
+document) attached to the nearest preceding section — §25.1801 — leaving it with
+187k chars and 84 oversized, mislabeled chunks. An "APPENDIX C TO PART 25" line
+opens a level-1 section, sibling to the Subparts. Two guards, both measured on
+far-25: the match is CASE-SENSITIVE all-caps, so the constant mixed-case prose
+mentions ("in accordance with Appendix K", "with appendix F, parts IV and V")
+are body text; and the heading must sit AT the modal body size, because the
+table of contents lists every appendix one size DOWN (7pt vs the 8pt body) —
+the same TOC trap the Subparts had. Appendix titles wrap at heading size while
+appendix body text is smaller, so the title-continuation rule above picks the
+title up and stops cleanly at the body.
 """
 
 from __future__ import annotations
@@ -58,6 +71,10 @@ from groundcite.ports.protocols import SectionTextMap, StructureDetector
 # Header regexes (operate on a single block's text, at line start).
 _SUBPART_RE = re.compile(r"^Subpart\s+([A-Z])\s*[—–\-]\s*(.+)$")
 _SECTION_RE = re.compile(r"^§\s*(\d+(?:\.\d+)*)\s*(.*)$")
+# "APPENDIX C TO PART 25" / "APPENDIX H TO PART 25—INSTRUCTIONS ...".
+# CASE-SENSITIVE on purpose: prose cites appendices constantly in mixed case
+# ("Appendix K", "appendix F, parts IV and V"), and those are body text.
+_APPENDIX_RE = re.compile(r"^APPENDIX\s+([A-Z])\s+TO\s+PART\s+\d+\s*(?:[—–\-]\s*(.*))?$")
 # A compound "(a)(1)(i)" chain of leading paren groups, followed by body text.
 # The inner [^)]{1,8} also rejects "(see paragraph ...)" mid-text cross-refs
 # whose label is a long sentence, so they never parse as headers.
@@ -157,12 +174,18 @@ class CfrStructureDetector(StructureDetector):
                     # Body-size Subpart line ⇒ the table-of-contents copy, not
                     # a section boundary (see module docstring).
                     subpart = None
+                appendix = _APPENDIX_RE.match(text)
+                if appendix is not None and block.font_size != modal_size:
+                    # Appendix headings sit AT the body size; the table of
+                    # contents lists them one size DOWN (see module docstring).
+                    appendix = None
                 chain = self._match_paren_chain(text, stack)
 
                 if (
                     title_open is not None
                     and subpart is None
                     and section_m is None
+                    and appendix is None
                     and chain is None
                     and stack
                     and stack[-1].id == title_open
@@ -184,6 +207,27 @@ class CfrStructureDetector(StructureDetector):
                     title = subpart.group(2).strip().rstrip(".")
                     self._open(
                         (clause_id, 1, title),
+                        stack,
+                        sections,
+                        clause_to_section,
+                        next_ordinal,
+                        document_id,
+                    )
+                    title_open = sections[-1].id
+                    title_sig = (block.font_size, block.is_bold)
+                    text_map[sections[-1].id] += text + "\n"
+                    total_chars += len(text)
+                    attached_chars += len(text)
+                elif appendix is not None:
+                    clause_id = f"Appendix {appendix.group(1)}"
+                    if clause_id in clause_to_section:
+                        continue  # repeat ⇒ running header (not counted)
+                    inline_title = (appendix.group(2) or "").strip().rstrip(".")
+                    # Level 1: an appendix is a top-level division of the part,
+                    # a sibling of the Subparts — never a child of the last
+                    # section that happened to precede it.
+                    self._open(
+                        (clause_id, 1, inline_title or None),
                         stack,
                         sections,
                         clause_to_section,

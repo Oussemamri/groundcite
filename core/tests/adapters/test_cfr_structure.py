@@ -33,6 +33,13 @@ def _big(text: str) -> ParsedBlock:
     return ParsedBlock(text=text, page_number=1, font_size=10.0, is_bold=False)
 
 
+def _small(text: str) -> ParsedBlock:
+    """Sub-body type (7pt): govinfo sets appendix BODY text and the table of
+    contents below the 8pt modal body size. This is the signal that separates a
+    real appendix heading (8pt) from its TOC copy (7pt)."""
+    return ParsedBlock(text=text, page_number=1, font_size=7.0, is_bold=False)
+
+
 def _doc(
     blocks_per_page: list[list[str | ParsedBlock]], document_id: UUID | None = None
 ) -> ParsedDocument:
@@ -309,3 +316,123 @@ def test_wrapped_heading_titles_continue_across_blocks() -> None:
     # Body prose after the heading run is NOT part of the title.
     a = next(s for s in sections if s.clause_id == "25.1309(a)")
     assert "operating limitation" in text[a.id]
+
+
+def test_appendix_headings_open_top_level_sections() -> None:
+    """Bug seen on far-25: Part 25's appendices carry no "§ x.y" heading, so ALL
+    of their text (22.8% of the document) attached to the nearest preceding
+    section — §25.1801 — which then held 187k chars and produced 84 oversized,
+    mislabeled chunks. "APPENDIX C TO PART 25" is a real structural boundary and
+    must open its own top-level section, sibling to the Subparts."""
+    did = uuid4()
+    parsed = _doc(
+        [
+            [
+                _big("Subpart I—Special Federal Aviation Regulations"),
+                _h("§ 25.1801 SFAR No. 111."),
+                _small("The SFAR body text about lavatory oxygen systems."),
+                # Real appendix headings sit AT the modal body size (8pt).
+                "APPENDIX C TO PART 25",
+                _small("Part I—Atmospheric Icing Conditions. Continuous maximum icing applies."),
+                "APPENDIX D TO PART 25",
+                _small("Criteria for determining minimum flight crew are as follows."),
+            ]
+        ],
+        document_id=did,
+    )
+    sections, text = CfrStructureDetector().detect(parsed)
+    by_clause = {s.clause_id: s for s in sections}
+
+    assert "Appendix C" in by_clause, "an appendix heading must open a section"
+    assert "Appendix D" in by_clause
+    app_c = by_clause["Appendix C"]
+    app_d = by_clause["Appendix D"]
+
+    # Top-level: a sibling of the Subparts, not a child of §25.1801.
+    assert app_c.level == 1 and app_d.level == 1
+    assert app_c.parent_id is None and app_d.parent_id is None
+
+    # The appendix text belongs to the appendix — NOT to §25.1801.
+    assert "Atmospheric Icing" in text[app_c.id]
+    assert "minimum flight crew" in text[app_d.id]
+    sfar = by_clause["25.1801"]
+    assert "Atmospheric Icing" not in text[sfar.id], "appendix text must not leak into §25.1801"
+    assert "minimum flight crew" not in text[sfar.id]
+    assert "lavatory oxygen" in text[sfar.id], "the SFAR keeps its own body"
+
+
+def test_toc_appendix_lines_do_not_open_sections() -> None:
+    """The same TOC trap as the Subparts: govinfo lists every appendix in the
+    table of contents at 7pt, BELOW the 8pt modal body size. Only a heading at
+    the modal size is a real boundary — otherwise the TOC would open all 14
+    appendices before the document body even starts."""
+    did = uuid4()
+    # Body text at the modal size must dominate, as it does in the real document
+    # (far-25: 17,814 blocks at 8pt vs 8,004 at 7pt) — the modal size IS the body.
+    body = [
+        f"(a)({i}) A body paragraph of the applicability section, long enough that the "
+        f"two orphaned table-of-contents lines stay well under the 10% orphan budget."
+        for i in range(6)
+    ]
+    parsed = _doc(
+        [
+            [
+                _small("APPENDIX C TO PART 25"),  # TOC copy (7pt) ⇒ not a heading
+                _small("APPENDIX D TO PART 25"),  # TOC copy ⇒ not a heading
+                _big("Subpart A—General"),
+                _h("§ 25.1 Applicability."),
+                *body,
+            ]
+        ],
+        document_id=did,
+    )
+    sections, _ = CfrStructureDetector().detect(parsed)
+    assert not any(s.clause_id.startswith("Appendix") for s in sections), (
+        "table-of-contents appendix lines must not open sections"
+    )
+    assert [s.clause_id for s in sections if s.level == 1] == ["Subpart A"]
+
+
+def test_prose_mentioning_an_appendix_is_not_a_heading() -> None:
+    """Running prose cites appendices constantly ("in accordance with Appendix K",
+    "with appendix F, parts IV and V"). Only the ALL-CAPS "APPENDIX x TO PART n"
+    form is a heading — a mixed-case mention is body text."""
+    did = uuid4()
+    parsed = _doc(
+        [
+            [
+                _big("Subpart A—General"),
+                _h("§ 25.1 Applicability."),
+                "(a) Each airplane must comply with Appendix K, and need not meet appendix F "
+                "parts IV and V, to part 25, when showing compliance with this section.",
+            ]
+        ],
+        document_id=did,
+    )
+    sections, text = CfrStructureDetector().detect(parsed)
+    assert not any(s.clause_id.startswith("Appendix") for s in sections)
+    a = next(s for s in sections if s.clause_id == "25.1(a)")
+    assert "Appendix K" in text[a.id], "the mention stays body text"
+
+
+def test_appendix_title_continues_across_wrapped_lines() -> None:
+    """Appendix titles wrap at heading size (8pt) while appendix BODY is 7pt, so
+    the existing wrapped-title rule picks the title up and stops at the body."""
+    did = uuid4()
+    parsed = _doc(
+        [
+            [
+                _big("Subpart A—General"),
+                _h("§ 25.1 Applicability."),
+                _small("(a) Body of the applicability section, long enough to matter here."),
+                "APPENDIX H TO PART 25—INSTRUCTIONS",
+                "FOR CONTINUED AIRWORTHINESS",
+                _small("H25.1 General. This appendix specifies requirements."),
+            ]
+        ],
+        document_id=did,
+    )
+    sections, text = CfrStructureDetector().detect(parsed)
+    app = next(s for s in sections if s.clause_id == "Appendix H")
+    assert app.title == "INSTRUCTIONS FOR CONTINUED AIRWORTHINESS"
+    assert "H25.1 General" in text[app.id], "7pt body is NOT swallowed into the title"
