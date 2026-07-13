@@ -20,10 +20,27 @@ from groundcite.adapters.structure.cfr_structure import (
 from groundcite.domain.entities import ParsedBlock, ParsedDocument, ParsedPage
 
 
-def _doc(blocks_per_page: list[list[str]], document_id: UUID | None = None) -> ParsedDocument:
+def _h(text: str) -> ParsedBlock:
+    """A typographic heading line: govinfo CFR prints real § / Subpart headings
+    in bold at body size, while running prose is body weight — the signal the
+    detector requires before a regex match may open a section."""
+    return ParsedBlock(text=text, page_number=1, font_size=8.0, is_bold=True)
+
+
+def _doc(
+    blocks_per_page: list[list[str | ParsedBlock]], document_id: UUID | None = None
+) -> ParsedDocument:
+    """Plain strings become body-weight blocks (font 8.0, not bold); pass a
+    ParsedBlock (e.g. via ``_h``) to control typography."""
     pages = [
         ParsedPage(
-            page_number=i + 1, blocks=tuple(ParsedBlock(text=t, page_number=i + 1) for t in bl)
+            page_number=i + 1,
+            blocks=tuple(
+                b
+                if isinstance(b, ParsedBlock)
+                else ParsedBlock(text=b, page_number=i + 1, font_size=8.0, is_bold=False)
+                for b in bl
+            ),
         )
         for i, bl in enumerate(blocks_per_page)
     ]
@@ -35,8 +52,8 @@ def test_builds_subpart_section_and_subparagraphs() -> None:
     parsed = _doc(
         [
             [
-                "Subpart B—Flight",
-                "§ 25.1309 Equipment, systems, and installations.",
+                _h("Subpart B—Flight"),
+                _h("§ 25.1309 Equipment, systems, and installations."),
                 "The applicant must show that the equipment is designed to function.",
                 "(a) Each item of equipment must independently perform its function.",
                 "(a)(1) For catastrophic conditions, a one-to-million probability.",
@@ -82,7 +99,7 @@ def test_roman_and_uppercase_sublevels_use_parent_context() -> None:
     parsed = _doc(
         [
             [
-                "§ 25.1 Section title.",
+                _h("§ 25.1 Section title."),
                 "(a) Top paragraph.",
                 "(1) Sub paragraph.",
                 "(i) Roman level.",
@@ -103,7 +120,8 @@ def test_repeat_header_is_running_header_not_new_section() -> None:
     did = uuid4()
     parsed = _doc(
         [
-            ["§ 25.1309 Equipment.", "Body one."],
+            [_h("§ 25.1309 Equipment."), "Body one."],
+            # Page-top running head: bare § number, NOT bold → recognized noise.
             ["§ 25.1309", "Body two continuing under the same section."],
         ],
         document_id=did,
@@ -122,7 +140,7 @@ def test_body_before_first_section_is_orphan_without_failing_when_minor() -> Non
         [
             [
                 "Hdr",  # tiny front-matter orphan (< 10% of total)
-                "§ 25.1 First section.",
+                _h("§ 25.1 First section."),
                 "Body of first section that is reasonably long so the orphan is minor.",
             ]
         ],
@@ -143,7 +161,7 @@ def test_fails_loudly_when_attached_ratio_below_90() -> None:
                 # A large volume of front-matter text with NO enclosing section,
                 # then a tiny section at the end → attached ratio < 90%.
                 "orphan body line that is long " * 60,
-                "§ 25.1 One short section.",
+                _h("§ 25.1 One short section."),
             ]
         ],
         document_id=did,
@@ -154,7 +172,7 @@ def test_fails_loudly_when_attached_ratio_below_90() -> None:
 
 
 def test_missing_document_id_raises() -> None:
-    parsed = _doc([["§ 25.1 Section.", "body"]], document_id=None)
+    parsed = _doc([[_h("§ 25.1 Section."), "body"]], document_id=None)
     with pytest.raises(StructureError):
         CfrStructureDetector().detect(parsed)
 
@@ -164,7 +182,7 @@ def test_paragraph_cross_reference_body_is_not_a_header() -> None:
     parsed = _doc(
         [
             [
-                "§ 25.1 Section.",
+                _h("§ 25.1 Section."),
                 "(a) A paragraph.",
                 "Refer to paragraph (a)(1) for the catastrophic case.",  # not a header
             ]
@@ -176,3 +194,52 @@ def test_paragraph_cross_reference_body_is_not_a_header() -> None:
     assert "25.1(a)(1)" not in clauses, "a mid-text cross-reference must not parse as a header"
     a = next(s for s in sections if s.clause_id == "25.1(a)")
     assert "Refer to paragraph" in text[a.id]
+
+
+def test_prose_cross_part_reference_is_not_a_header() -> None:
+    """Bug seen on far-25: SFAR body text cites 14 CFR part 21, and the line
+    wrap puts ``§ 21.4(a)(6) encountered ...`` at the start of a parsed block.
+    That block is NOT bold (running prose), so it must stay body text — never a
+    phantom part-21 section swallowing everything until the next real header."""
+    did = uuid4()
+    parsed = _doc(
+        [
+            [
+                _h("§ 25.1309 Equipment, systems, and installations."),
+                "(a) Equipment must be approved as required by 14 CFR part 21 and withstand",
+                "§ 21.4(a)(6) encountered during the phases of flight and other operations.",
+                _h("§ 25.1310 Power source capacity and distribution."),
+                "(a) Each power source must be able to supply its loads reliably.",
+            ]
+        ],
+        document_id=did,
+    )
+    sections, text = CfrStructureDetector().detect(parsed)
+    clauses = {s.clause_id for s in sections}
+    assert not any(c.startswith("21") for c in clauses), (
+        "in-prose part-21 reference opened a phantom section"
+    )
+    a = next(s for s in sections if s.clause_id == "25.1309(a)")
+    assert "21.4(a)(6) encountered" in text[a.id], "the wrapped reference must stay body text"
+    assert "25.1310" in clauses, "the next real bold header must still open a section"
+
+
+def test_page_top_running_head_does_not_preempt_the_real_heading() -> None:
+    """A bare, non-bold ``§ 25.1309`` page running head must neither open a
+    titleless section ahead of the real bold heading nor demote that heading
+    to a 'repeat' — the failure that blanked every section title on far-25."""
+    did = uuid4()
+    parsed = _doc(
+        [
+            [
+                "§ 25.1309",  # running head at page top: bare number, not bold
+                _h("§ 25.1309 Equipment."),
+                "(a) Body text of the equipment section that is long enough to matter.",
+            ]
+        ],
+        document_id=did,
+    )
+    sections, _ = CfrStructureDetector().detect(parsed)
+    matches = [s for s in sections if s.clause_id == "25.1309"]
+    assert len(matches) == 1
+    assert matches[0].title == "Equipment"

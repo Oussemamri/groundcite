@@ -45,8 +45,15 @@ def _sample_pages() -> list[ParsedPage]:
         ParsedPage(
             page_number=1,
             blocks=(
-                ParsedBlock(text="Subpart B—Flight", page_number=1),
-                ParsedBlock(text="§ 25.1309 Equipment, systems, and installations.", page_number=1),
+                # Headings carry the real govinfo typography signal (bold);
+                # running prose below is body weight.
+                ParsedBlock(text="Subpart B—Flight", page_number=1, font_size=8.0, is_bold=True),
+                ParsedBlock(
+                    text="§ 25.1309 Equipment, systems, and installations.",
+                    page_number=1,
+                    font_size=8.0,
+                    is_bold=True,
+                ),
                 ParsedBlock(
                     text="The applicant must show that the equipment is designed to function.",
                     page_number=1,

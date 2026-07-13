@@ -21,12 +21,18 @@ CFR order:
     L5 (i)       → L6 (A)   one uppercase letter
 
 Real CFR paragraphs often carry the full chain on one line ("(a)(1) When...");
-the detector opens the chain as nested sub-sections. Running headers/footers
-(a repeated ``§ 25.1309`` at a page top, ``14 CFR Part 25`` footers, page
-numbers) are handled by clause-id uniqueness: a header whose clause_id already
-exists is treated as a repeated running header — it does NOT open a new section
-and its text is excluded from the 90% accounting (recognized noise, not orphan
-text we couldn't account for). The parser stays a dumb extractor; noise lives here.
+the detector opens the chain as nested sub-sections.
+
+A ``§ X.Y`` match alone is NOT a header: govinfo CFR prints real section
+headings in bold, while running prose is body weight. A NON-bold §-line is
+either a page-top running head (bare number, e.g. ``§ 25.1309`` — recognized
+noise, excluded from the 90% accounting like page numbers) or an in-prose
+cross-reference that line-wrapped onto a fresh line (e.g. SFAR text citing
+``§ 21.4(a)(6) encountered during ...`` from 14 CFR part 21) — body text
+attached to the open section, never a section boundary. Clause-id uniqueness
+remains as a second guard: a bold header whose clause_id already exists is a
+repeat and does not open a new section. The parser stays a dumb extractor;
+noise lives here.
 """
 
 from __future__ import annotations
@@ -120,6 +126,13 @@ class CfrStructureDetector(StructureDetector):
 
                 subpart = _SUBPART_RE.match(text)
                 section_m = _SECTION_RE.match(text)
+                if section_m is not None and not block.is_bold:
+                    # Not typographically a heading (see module docstring):
+                    # bare number ⇒ page running head (recognized noise),
+                    # trailing prose ⇒ wrapped in-body cross-reference (body).
+                    if section_m.group(2).strip() in ("", "."):
+                        continue
+                    section_m = None
                 chain = self._match_paren_chain(text, stack)
 
                 if subpart is not None:
