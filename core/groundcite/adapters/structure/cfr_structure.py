@@ -113,6 +113,9 @@ _PAGE_NOISE_RE = re.compile(
 # "ER18FE98.004</GPH>", "262046 EC28SE91.050</GPH>". Searched (not anchored)
 # because the tag trails a document id. 77 blocks on far-25.
 _GRAPHIC_REF_RE = re.compile(r"</?GPH>")
+# A word broken across a line by govinfo's justified two-column layout:
+# "within 90 sec-" + "onds". 17.4% of far-25's lines end this way (see _append_line).
+_SOFT_HYPHEN_END_RE = re.compile(r"[A-Za-z]-$")
 
 # Valid lowercase roman numerals (enough for CFR sub-sub levels).
 _ROMAN = {
@@ -230,7 +233,7 @@ class CfrStructureDetector(StructureDetector):
                     # Same-typography non-header block right after a heading:
                     # the wrapped remainder of that heading's title.
                     self._extend_title(stack, sections, clause_to_section, text)
-                    text_map[stack[-1].id] += text + "\n"
+                    _append_line(text_map, stack[-1].id, text)
                     total_chars += len(text)
                     attached_chars += len(text)
                     continue
@@ -251,7 +254,7 @@ class CfrStructureDetector(StructureDetector):
                     )
                     title_open = sections[-1].id
                     title_sig = (block.font_size, block.is_bold)
-                    text_map[sections[-1].id] += text + "\n"
+                    _append_line(text_map, sections[-1].id, text)
                     total_chars += len(text)
                     attached_chars += len(text)
                 elif appendix is not None:
@@ -272,7 +275,7 @@ class CfrStructureDetector(StructureDetector):
                     )
                     title_open = sections[-1].id
                     title_sig = (block.font_size, block.is_bold)
-                    text_map[sections[-1].id] += text + "\n"
+                    _append_line(text_map, sections[-1].id, text)
                     total_chars += len(text)
                     attached_chars += len(text)
                 elif section_m is not None:
@@ -291,7 +294,7 @@ class CfrStructureDetector(StructureDetector):
                     )
                     title_open = sections[-1].id
                     title_sig = (block.font_size, block.is_bold)
-                    text_map[sections[-1].id] += text + "\n"
+                    _append_line(text_map, sections[-1].id, text)
                     total_chars += len(text)
                     attached_chars += len(text)
                 elif chain is not None:
@@ -310,7 +313,7 @@ class CfrStructureDetector(StructureDetector):
                     total_chars += len(text)
                     attached_chars += n
                 elif stack:
-                    text_map[stack[-1].id] += text + "\n"
+                    _append_line(text_map, stack[-1].id, text)
                     total_chars += len(text)
                     attached_chars += len(text)
                 else:
@@ -435,7 +438,7 @@ class CfrStructureDetector(StructureDetector):
             created_any = True
         if not created_any:
             return 0  # whole chain already existed ⇒ running header
-        text_map[deepest.id] += block_text + "\n"
+        _append_line(text_map, deepest.id, block_text)
         return len(block_text)
 
     @staticmethod
@@ -536,6 +539,31 @@ class CfrStructureDetector(StructureDetector):
         if cur_level == 5 and len(label) == 1 and label.isupper():
             return 6
         return None
+
+
+def _append_line(text_map: dict[UUID, str], section_id: UUID, line: str) -> None:
+    """Append one parsed line to a section's text, healing print hyphenation.
+
+    govinfo sets the CFR in justified two columns, so words break across lines
+    with a soft hyphen ("within 90 sec-" / "onds") and the parser emits one block
+    per line. 17.4% of far-25's lines end that way, which left 90% of chunks with
+    mangled vocabulary: "seconds" became the tokens "sec" and "onds", so a lexical
+    search for "seconds" could never match the clause that contains it, and the
+    embedder saw broken words.
+
+    Heal only a hyphen at a line END whose continuation starts LOWERCASE — that is
+    a broken word. A hyphen inside a line is a real compound ("fail-safe",
+    "damage-tolerance") and is untouched, as is a hyphen before an uppercase
+    continuation. The residual risk is a genuine compound that happens to break at
+    its hyphen ("fail-" / "safe" -> "failsafe"); that is rare, and far cheaper than
+    losing 90% of the corpus's vocabulary to the alternative.
+    """
+    previous = text_map[section_id]
+    body = previous.rstrip("\n")
+    if body and _SOFT_HYPHEN_END_RE.search(body) and line[:1].islower():
+        text_map[section_id] = f"{body[:-1]}{line}\n"
+    else:
+        text_map[section_id] = f"{previous}{line}\n"
 
 
 def _modal_font_size(doc: ParsedDocument) -> float | None:

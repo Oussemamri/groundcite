@@ -496,6 +496,81 @@ def test_real_content_sharing_the_footer_font_size_survives() -> None:
     assert "Load factor 2.5" in joined
 
 
+def test_line_end_hyphenation_is_healed_in_section_text() -> None:
+    """govinfo's justified two-column layout breaks words across lines with a soft
+    hyphen ("within 90 sec-" / "onds"), and the parser emits one block per line.
+    17.4% of far-25's lines end that way, leaving 90% of chunks with mangled
+    vocabulary — "seconds" becomes the tokens "sec" and "onds", which the lexical
+    index can never match. Joining heals the word."""
+    did = uuid4()
+    parsed = _doc(
+        [
+            [
+                _big("Subpart D—Design and Construction"),
+                _h("§ 25.803 Emergency evacuation."),
+                "(c) It must be shown that the maximum seating capacity can be evacu-",
+                "ated from the airplane under simulated emergency conditions within 90 sec-",
+                "onds. Compliance must be shown by actual dem-",
+                "onstration using the test criteria of appendix J.",
+            ]
+        ],
+        document_id=did,
+    )
+    _, text = CfrStructureDetector().detect(parsed)
+    joined = " ".join("".join(text.values()).split())
+
+    assert "90 seconds" in joined, "the soft hyphen must be healed"
+    assert "evacuated" in joined
+    assert "demonstration" in joined
+    assert "sec- onds" not in joined and "sec-" not in joined
+
+
+def test_real_hyphenated_compounds_are_preserved() -> None:
+    """A hyphen INSIDE a line is a real compound ("fail-safe", "damage-tolerance")
+    and must survive untouched — only a hyphen at a line END that continues onto
+    the next line is a print artefact."""
+    did = uuid4()
+    parsed = _doc(
+        [
+            [
+                _big("Subpart C—Structure"),
+                _h("§ 25.571 Damage-tolerance evaluation."),
+                "(a) The fail-safe strength of the structure must be shown by a "
+                "damage-tolerance evaluation of the airframe.",
+                "(b) An en-route configuration must also be considered here.",
+            ]
+        ],
+        document_id=did,
+    )
+    _, text = CfrStructureDetector().detect(parsed)
+    joined = " ".join("".join(text.values()).split())
+
+    assert "fail-safe" in joined
+    assert "damage-tolerance" in joined
+    assert "en-route" in joined
+
+
+def test_hyphen_before_an_uppercase_continuation_is_not_joined() -> None:
+    """A line ending in a hyphen followed by an UPPERCASE word is not a broken
+    word (it is a compound or a dash), so it is left alone."""
+    did = uuid4()
+    parsed = _doc(
+        [
+            [
+                _big("Subpart A—General"),
+                _h("§ 25.1 Applicability."),
+                "(a) Compliance with the FAA-",
+                "Approved procedures is required for all transport category airplanes.",
+            ]
+        ],
+        document_id=did,
+    )
+    _, text = CfrStructureDetector().detect(parsed)
+    joined = " ".join("".join(text.values()).split())
+    assert "FAA-" in joined, "an uppercase continuation must not be glued"
+    assert "FAAApproved" not in joined
+
+
 def test_appendix_title_continues_across_wrapped_lines() -> None:
     """Appendix titles wrap at heading size (8pt) while appendix BODY is 7pt, so
     the existing wrapped-title rule picks the title up and stops at the body."""
