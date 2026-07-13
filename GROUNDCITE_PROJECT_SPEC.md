@@ -417,8 +417,19 @@ Rules: PDFs never enter git (size + license); `scripts/fetch_corpus.py` download
 |---|---|---|
 | 0 | P1–P6 prep | golden JSONL committed; skeleton CI green |
 | 1 | Schema + ingestion + `groundcite ingest` | FAR-25 ingested; ingestion report clean |
-| 2 | Hybrid retrieval + fusion + `groundcite ask` (retrieval-only mode) | top-6 chunks printed with scores for 10 sample questions |
-| 3 | **Eval harness + first baseline** + generation + gates | `eval run` report committed with real (bad) numbers; then tune: chunking → +rerank → thresholds; each change = a run |
+| 2 | Hybrid retrieval + fusion + `groundcite ask` (retrieval-only mode) + **retrieval-only eval metrics** | top-6 chunks printed with scores for 10 sample questions; `eval run --retrieval-only` reports a real recall@5/recall@10/MRR baseline |
+| 3 | **Judge eval metrics + first full baseline** + generation + gates | `eval run` report committed with real (bad) numbers; then tune: chunking → +rerank → thresholds; each change = a run |
+
+**§15.1 Amendment (Week 2, agreed):** the *retrieval half* of §8 — recall@k, MRR,
+and the eval runner/report — moves from Week 3 into Week 2. Rationale: Week 2 is
+where retrieval and fusion are actually built, and CLAUDE.md rule 4 requires an
+eval run for every change to them; without this, Week 2's only quality bar is
+eyeballing 10 questions and every Week-3 tuning decision is retro-justified.
+These metrics are pure arithmetic over `expected_clauses` — no judge, no LLM, no
+Ragas, no new dependency — and §8 already names retrieval-only cases "the most
+stable CI signal". The *judge half* (faithfulness, context precision, Ragas,
+generation, Gates A/B) stays in Week 3 as written. This splits §8 along a seam
+§8 itself draws; it does not reorder the milestones wholesale.
 | 4 | FastAPI + SSE + `/ask` and `/documents` pages | end-to-end demo in browser |
 | 5 | `/evals` page, abstention polish, README + demo GIF, **blog post: "Recall@5 from X→Y on FAR Part 25"** | repo public, post published, link on CV |
 

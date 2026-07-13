@@ -155,7 +155,7 @@ Both go in optional extras (`[rerank]`), lazily imported, so CI stays dependency
     → **verify (DoD):** run 10 sample questions, paste the top-6 tables. This is the
       spec §15 Week-2 proof.
 
-### Phase 6 — First real baseline  ⚠️ NEEDS YOUR DECISION (see §3)
+### Phase 6 — First real baseline  ✅ DECIDED: pull forward (spec §15.1 amendment)
 12. Hand-rolled `recall@5`, `recall@10`, `MRR` (spec §8: ~15 lines each, no library,
     no judge, no LLM) over the existing 99-case golden set.
 13. `groundcite eval run --suite core --retrieval-only` → scored table + `evals/reports/<sha>.md`.
@@ -168,12 +168,11 @@ Both go in optional extras (`[rerank]`), lazily imported, so CI stays dependency
 
 ---
 
-## 3. The one decision I need from you
+## 3. Decision (settled) — retrieval evals pull forward into Week 2
 
-**Do we pull retrieval-only eval metrics (Phase 6) into Week 2?**
-
-Spec §15 puts the eval harness in Week 3 and says "resist reordering" — so this
-is a real deviation and I won't do it silently (rule 1).
+**DECIDED: yes.** Recorded as the **§15.1 amendment** in the spec, so code and
+spec do not silently drift (spec preamble: "if code and spec disagree, fix one
+of them in the same PR").
 
 **The case for pulling it forward:** Week 2 *builds retrieval and fusion*, and
 CLAUDE.md rule 4 says every change to retrieval/fusion/thresholds must ship with
@@ -189,9 +188,9 @@ Week 3 where the spec puts it.
 vibe check — which is the project's stated differentiator (§1) and the honest
 bad baseline the blog post needs (§8).
 
-**My recommendation: pull it forward.** It is not a reorder so much as splitting
-§8 along a seam the spec itself already draws ("retrieval-only smoke cases (no
-judge) are the most stable CI signal").
+It is not a reorder so much as splitting §8 along a seam the spec itself already
+draws ("retrieval-only smoke cases (no judge) are the most stable CI signal").
+The judge half (faithfulness, Ragas, generation, Gates A/B) stays in Week 3.
 
 ## 4. Explicitly OUT of scope for Week 2
 
