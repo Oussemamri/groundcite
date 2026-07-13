@@ -415,6 +415,87 @@ def test_prose_mentioning_an_appendix_is_not_a_heading() -> None:
     assert "Appendix K" in text[a.id], "the mention stays body text"
 
 
+def test_page_furniture_is_dropped_from_chunk_text() -> None:
+    """The source PDF stamps print-production footers and running heads on every
+    page — together ~4% of far-25's text. None of it is regulatory content, and
+    all of it would otherwise be embedded INSIDE retrievable chunks, degrading
+    both the dense and the lexical signal. Recognized noise, like page numbers:
+    dropped, not counted as orphan text we failed to attach."""
+    did = uuid4()
+    noise_blocks = [
+        # govinfo print footer
+        "VerDate Sep<11>2014",
+        "09:06 Jun 28, 2024",
+        "Jkt 262046",
+        "PO 00000",
+        "Frm 00204",
+        "Fmt 8010",
+        "Sfmt 8010",
+        r"Y:\SGML\262046.XXX",
+        # running heads
+        "14 CFR Ch. I (1–1–24 Edition)",
+        "Federal Aviation Administration, DOT",
+        "Pt. 25, App. C",
+        # typesetter proof stamp + SGML graphic refs (figure-only appendices)
+        "jspears on DSK121TN23PROD with CFR",
+        "262046 EC28SE91.050</GPH>",
+    ]
+    parsed = _doc(
+        [
+            [
+                _big("Subpart A—General"),
+                _h("§ 25.1 Applicability."),
+                "(a) This part prescribes airworthiness standards for transport airplanes.",
+                *[ParsedBlock(text=t, page_number=1, font_size=6.5) for t in noise_blocks],
+                "(b) The airplane must also meet the applicable noise requirements.",
+            ]
+        ],
+        document_id=did,
+    )
+    _, text = CfrStructureDetector().detect(parsed)  # must not raise on orphans
+    joined = "".join(text.values())
+    for noise in (
+        "VerDate",
+        "Jkt 262046",
+        "PO 00000",
+        "Frm 00204",
+        "Sfmt",
+        "SGML",
+        "CFR Ch.",
+        "DOT",
+        "Pt. 25",
+        "DSK",
+        "GPH",
+    ):
+        assert noise not in joined, f"page furniture {noise!r} leaked into chunk text"
+    assert "airworthiness standards" in joined
+    assert "noise requirements" in joined
+
+
+def test_real_content_sharing_the_footer_font_size_survives() -> None:
+    """The footer is matched by PATTERN, never by font size — ~564 legitimate
+    blocks (table cells) share its 6.5pt, and dropping those would delete real
+    regulatory content."""
+    did = uuid4()
+    parsed = _doc(
+        [
+            [
+                _big("Subpart A—General"),
+                _h("§ 25.1 Applicability."),
+                "(a) The following table prescribes the required load factors.",
+                # Real table content, same 6.5pt as the print footer.
+                ParsedBlock(text="Maximum weight 12,500 pounds", page_number=1, font_size=6.5),
+                ParsedBlock(text="Load factor 2.5", page_number=1, font_size=6.5),
+            ]
+        ],
+        document_id=did,
+    )
+    _, text = CfrStructureDetector().detect(parsed)
+    joined = "".join(text.values())
+    assert "Maximum weight 12,500 pounds" in joined
+    assert "Load factor 2.5" in joined
+
+
 def test_appendix_title_continues_across_wrapped_lines() -> None:
     """Appendix titles wrap at heading size (8pt) while appendix BODY is 7pt, so
     the existing wrapped-title rule picks the title up and stops at the body."""

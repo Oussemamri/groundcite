@@ -81,6 +81,38 @@ _APPENDIX_RE = re.compile(r"^APPENDIX\s+([A-Z])\s+TO\s+PART\s+\d+\s*(?:[—–\-
 _PAREN_CHAIN_RE = re.compile(r"^((?:\([^)]{1,8}\))+)\s*(.*)$")
 _LABEL_RE = re.compile(r"\(([^)]{1,8})\)")
 _PURE_PAGE_NUM_RE = re.compile(r"^\d{1,4}$")
+# Page furniture the source PDF stamps on every page — print-production footers
+# and running heads. Measured on far-25 (blocks / chars):
+#   VerDate|Jkt|PO|Frm|Fmt|Sfmt|timestamp   1,939 / 22,437   govinfo print footer
+#   Y:\SGML\262046.XXX                        277 /  4,986   typesetter paths
+#   "14 CFR Ch. I (1-1-24 Edition)"           139 /  4,031   running head (verso)
+#   "Federal Aviation Administration, DOT"    138 /  4,968   running head (recto)
+#   "Pt. 25, App. C"                          104 /  1,445   running head
+# Together ~4% of the document's text. None of it is regulatory content, and all
+# of it would otherwise be embedded INSIDE retrievable chunks, degrading both the
+# dense and lexical signal. Dropped like page numbers: recognized noise, excluded
+# from the 90% orphan accounting rather than counted as text we failed to attach.
+#
+# Matched by PATTERN, never by font size — ~564 legitimate blocks (table cells)
+# share the footer's 6.5pt, and filtering by size would delete real content.
+_PAGE_NOISE_RE = re.compile(
+    r"^(?:VerDate\b"
+    r"|Jkt\s+\d"
+    r"|PO\s+\d"
+    r"|Frm\s+\d"
+    r"|Fmt\s+\d"
+    r"|Sfmt\s+\d"
+    r"|[A-Za-z]:\\"  # Y:\SGML\..., E:\FR\FM\...
+    r"|\d+\s+CFR\s+Ch\."  # "14 CFR Ch. I (1-1-24 Edition)"
+    r"|Federal Aviation Administration, DOT\s*$"
+    r"|Pt\.\s+\d"  # "Pt. 25, App. C"
+    r"|\w+\s+on\s+DSK"  # "jspears on DSK121TN23PROD with CFR" (proof stamp)
+    r"|\d{2}:\d{2}\s+\w{3}\s+\d{1,2},\s+\d{4}$)"
+)
+# SGML graphic references left in the text layer of figure-only appendices, e.g.
+# "ER18FE98.004</GPH>", "262046 EC28SE91.050</GPH>". Searched (not anchored)
+# because the tag trails a document id. 77 blocks on far-25.
+_GRAPHIC_REF_RE = re.compile(r"</?GPH>")
 
 # Valid lowercase roman numerals (enough for CFR sub-sub levels).
 _ROMAN = {
@@ -153,10 +185,14 @@ class CfrStructureDetector(StructureDetector):
                 if not text:
                     continue
 
-                # Recognized noise (page numbers / repeated running headers) is
-                # excluded from the 90% accounting: it is structural we
-                # deliberately dropped, not "orphan text we couldn't account for".
-                if _PURE_PAGE_NUM_RE.match(text):
+                # Recognized noise (page numbers, print footers, running heads) is
+                # excluded from the 90% accounting: it is structure we deliberately
+                # dropped, not "orphan text we couldn't account for".
+                if (
+                    _PURE_PAGE_NUM_RE.match(text)
+                    or _PAGE_NOISE_RE.match(text)
+                    or _GRAPHIC_REF_RE.search(text)
+                ):
                     title_open = None
                     continue
 
