@@ -199,6 +199,47 @@ It is not a reorder so much as splitting §8 along a seam the spec itself alread
 draws ("retrieval-only smoke cases (no judge) are the most stable CI signal").
 The judge half (faithfulness, Ragas, generation, Gates A/B) stays in Week 3.
 
+## 3b. RESULTS (filled in as built)
+
+**First baseline** — far-25, reranker OFF, sha `695a2ef`:
+
+| suite | scored cases | recall@5 | recall@10 | MRR |
+|---|---|---|---|---|
+| core | 40 | **0.769** | **0.844** | **0.811** |
+| german | 8 | 0.917 | 0.917 | 0.938 |
+| negative | 10 (must-abstain) | — | — | — |
+
+German outscores English because clause numbers survive translation and fire the
+exact-match fast path; multilingual bge-m3 carries the rest. This is the honest
+starting number (spec §8 honesty rule) — the blog narrative is the improvement.
+
+### FINDING — Gate A cannot be built on RRF (blocks Week 3)
+
+The eval harness earned its place immediately. Measured on the fused scale:
+
+- Fused top-scores collapse to **1/61 = 0.0164** for nearly every case (the top
+  chunk is usually rank-1 in only ONE of the two lists).
+- Grounded and must-abstain cases have **identical** min/median top-scores, and
+  **25 of 40** grounded cases score at or below the *best* must-abstain case.
+- Spec §7's reranker-off gate, "RRF ≥ 0.05", is therefore **unreachable** (the
+  two-list ceiling is 2/61 = 0.0328) **and useless** (the distributions overlap
+  completely).
+
+Visible in the DoD sample: the out-of-corpus question ("What does DO-178C say
+about MC/DC?") tops out at 0.0164 — the *same score* as legitimate hits for cabin
+pressure, fire detection, and bird strike.
+
+**⇒ The reranker is REQUIRED for Gate A, not optional.** Week 3 must either make
+the reranker mandatory or replace the RRF threshold with a calibrated score.
+Pinned by a unit test so the arithmetic cannot silently drift.
+
+### Known residual, as predicted (AD-5)
+
+§25.1801 (the SFAR/appendix catch-all) pollutes dense retrieval — it is the rank-1
+hit for "What failure probability is acceptable for catastrophic conditions?",
+which is one of only two complete misses in the core suite. Fixing the SFAR/
+appendix chunking is a separate authorized task and would likely move recall@5.
+
 ## 4. Explicitly OUT of scope for Week 2
 
 - Generation / the LLM answerer (`llm/*` adapters stay stubs) — Week 3.
