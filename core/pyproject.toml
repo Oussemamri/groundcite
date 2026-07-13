@@ -101,6 +101,7 @@ module = [
     "groundcite.adapters.embedding.bge_m3_embed",
     "groundcite.adapters.tokencount.bge_m3_tokencount",
     "groundcite.adapters.parser.pymupdf_parser",
+    "groundcite.adapters.reranker.bge_reranker",
 ]
 ignore_missing_imports = true
 disallow_untyped_calls = false

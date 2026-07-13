@@ -15,15 +15,18 @@ from dataclasses import dataclass
 
 from groundcite.adapters.chunker.clause_chunker import make_clause_chunker
 from groundcite.adapters.embedding.bge_m3_embed import make_bge_m3_embedder, make_zero_embedder
+from groundcite.adapters.lexical.pg_lexical import make_pg_lexical_index
 from groundcite.adapters.parser.pymupdf_parser import make_pymupdf_parser
 from groundcite.adapters.repository.pg_repo import make_pg_repository
+from groundcite.adapters.reranker.bge_reranker import make_bge_reranker
 from groundcite.adapters.structure.cfr_structure import make_cfr_structure_detector
 from groundcite.adapters.tokencount.bge_m3_tokencount import (
     make_bge_m3_token_counter,
     make_whitespace_token_counter,
 )
+from groundcite.adapters.vector.pg_vector import make_pg_vector_index
 from groundcite.config import Settings
-from groundcite.ports.protocols import EmbeddingProvider, TokenCounter
+from groundcite.ports.protocols import EmbeddingProvider, Reranker, TokenCounter
 from groundcite.services import (
     AskService,
     EvalService,
@@ -67,6 +70,15 @@ def build_services(settings: Settings) -> Services:
 
     repository = make_pg_repository(settings.database_url)
 
+    # Retrieval (spec §7): both indexes read the same chunks table; the reranker
+    # is optional — RERANKER_ENABLED=false wires None, which turns stage [3] off
+    # in AskService rather than hiding a no-op adapter behind the port.
+    vector_index = make_pg_vector_index(settings.database_url)
+    lexical_index = make_pg_lexical_index(settings.database_url)
+    reranker: Reranker | None = (
+        make_bge_reranker(model_name=settings.reranker_model) if settings.reranker_enabled else None
+    )
+
     return Services(
         ingestion=IngestionService(
             parser=parser,
@@ -76,7 +88,17 @@ def build_services(settings: Settings) -> Services:
             token_counter=token_counter,
             repository=repository,
         ),
-        ask=AskService(),
+        ask=AskService(
+            embedder=embedder,
+            vector_index=vector_index,
+            lexical_index=lexical_index,
+            reranker=reranker,
+            rrf_k=settings.rrf_k,
+            candidates_dense=settings.candidates_dense,
+            candidates_lexical=settings.candidates_lexical,
+            fused_k=settings.fused_k,
+            context_k=settings.context_k,
+        ),
         evals=EvalService(),
         library=LibraryService(),
     )

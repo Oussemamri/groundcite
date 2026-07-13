@@ -76,6 +76,27 @@ class RetrievedChunk(_Frozen):
     score: float
 
 
+class RetrievalResult(_Frozen):
+    """Output of the retrieval half of the ask pipeline (spec §7 steps 0-3).
+
+    Deliberately generation-free: this is what ``AskService.retrieve`` returns,
+    and it is the ONLY thing the retrieval-only eval metrics (recall@k, MRR —
+    spec §8, §15.1) need. Keeping it a first-class result is what lets the eval
+    harness score retrieval without an LLM or a judge.
+
+    ``chunks`` is the final ranked context (top ``context_k``); ``candidates`` is
+    the wider fused list kept for abstention ``top_passages`` and debugging.
+    ``pipeline_debug`` carries per-stage timings and candidate scores (spec §12).
+    """
+
+    question: str
+    chunks: tuple[RetrievedChunk, ...]
+    candidates: tuple[RetrievedChunk, ...] = ()
+    clause_ids: tuple[str, ...] = ()
+    reranked: bool = False
+    pipeline_debug: dict[str, object] = Field(default_factory=dict)
+
+
 class Answer(_Frozen):
     """A grounded answer produced by the generator (spec §7 generation contract)."""
 

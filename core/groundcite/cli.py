@@ -15,7 +15,7 @@ import typer
 from groundcite.config import get_settings
 from groundcite.container import build_services
 from groundcite.domain.entities import DocumentMeta
-from groundcite.domain.results import IngestionReport
+from groundcite.domain.results import IngestionReport, RetrievalResult
 
 app = typer.Typer(
     name="groundcite",
@@ -91,9 +91,54 @@ def _format_report(r: IngestionReport) -> str:
 
 
 @app.command()
-def ask(question: str, json: bool = typer.Option(False, help="Emit JSON")) -> None:
-    """Ask a grounded question (spec §7)."""
-    raise typer.Exit(_exit_stub("ask"))
+def ask(
+    question: str,
+    json_out: bool = typer.Option(False, "--json", help="Emit JSON"),
+    slug: list[str] = typer.Option(None, "--slug", help="Restrict to document slug(s)"),
+    top_k: int = typer.Option(None, "--top-k", help="Passages to show (default CONTEXT_K=6)"),
+    rerank: bool = typer.Option(
+        None, "--rerank/--no-rerank", help="Override RERANKER_ENABLED for this ask"
+    ),
+) -> None:
+    """Ask a grounded question (spec §7).
+
+    Week 2 is RETRIEVAL-ONLY (spec §15): it prints the top-k passages with their
+    scores. Generation and the abstention gates arrive in Week 3.
+    """
+    settings = get_settings()
+    if rerank is not None:
+        settings = settings.model_copy(update={"reranker_enabled": rerank})
+
+    services = build_services(settings)
+    result = services.ask.retrieve(question, document_slugs=slug or None, top_k=top_k)
+
+    if json_out:
+        typer.echo(result.model_dump_json(indent=2))
+        return
+    typer.echo(_format_retrieval(result))
+
+
+def _format_retrieval(r: RetrievalResult) -> str:
+    stage = "fused+reranked" if r.reranked else "fused (no rerank)"
+    lines = [
+        f"Q: {r.question}",
+        f"   clause fast-path: {', '.join(r.clause_ids) if r.clause_ids else '(none detected)'}",
+        f"   stage: {stage}   passages: {len(r.chunks)}",
+        "",
+        f"{'#':>2}  {'score':>7}  clause_path",
+        f"{'-' * 2}  {'-' * 7}  {'-' * 60}",
+    ]
+    for i, chunk in enumerate(r.chunks, 1):
+        lines.append(f"{i:>2}  {chunk.score:>7.4f}  {chunk.clause_path}")
+        lines.append(f"        {_snippet(chunk.content)}")
+    return "\n".join(lines)
+
+
+def _snippet(content: str, width: int = 88) -> str:
+    """One-line preview: the chunk body after its breadcrumb header (spec §6)."""
+    body = content.split("\n", 1)[-1] if "\n" in content else content
+    flat = " ".join(body.split())
+    return flat[:width] + ("…" if len(flat) > width else "")
 
 
 @eval_app.command("run")

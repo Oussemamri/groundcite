@@ -40,6 +40,73 @@ class FakeTokenCounter:
         return len(text.split())
 
 
+class FakeVectorIndex:
+    """Dense index returning a scripted, already-ranked candidate list."""
+
+    def __init__(self, results: Sequence[tuple[Chunk, float]] | None = None) -> None:
+        self.results = list(results or ())
+        self.calls: list[tuple[int, tuple[str, ...]]] = []
+
+    def search(
+        self,
+        embedding: Vector,
+        top_k: int,
+        document_slugs: Sequence[str] | None = None,
+    ) -> list[tuple[Chunk, float]]:
+        self.calls.append((top_k, tuple(document_slugs or ())))
+        return self.results[:top_k]
+
+
+class FakeLexicalIndex:
+    """Lexical index + clause fast path, both scripted.
+
+    ``clause_hits`` maps a clause id ("25.1309(b)") to the chunks the exact-match
+    fast path returns for it.
+    """
+
+    def __init__(
+        self,
+        results: Sequence[tuple[Chunk, float]] | None = None,
+        clause_hits: dict[str, list[Chunk]] | None = None,
+    ) -> None:
+        self.results = list(results or ())
+        self.clause_hits = clause_hits or {}
+        self.searched: list[str] = []
+        self.matched: list[str] = []
+
+    def search(
+        self,
+        query: str,
+        top_k: int,
+        document_slugs: Sequence[str] | None = None,
+    ) -> list[tuple[Chunk, float]]:
+        self.searched.append(query)
+        return self.results[:top_k]
+
+    def match_clause(
+        self, clause_path: str, document_slugs: Sequence[str] | None = None
+    ) -> list[Chunk]:
+        self.matched.append(clause_path)
+        return list(self.clause_hits.get(clause_path, ()))
+
+
+class FakeReranker:
+    """Cross-encoder stand-in: reorders candidates by a scripted score per
+    clause_path (unlisted chunks score 0.0). No model, no torch."""
+
+    def __init__(self, scores: dict[str, float] | None = None) -> None:
+        self.scores = scores or {}
+        self.calls: list[tuple[str, int]] = []
+
+    def rerank(
+        self, question: str, candidates: Sequence[Chunk], top_k: int
+    ) -> list[tuple[Chunk, float]]:
+        self.calls.append((question, top_k))
+        scored = [(c, self.scores.get(c.clause_path, 0.0)) for c in candidates]
+        scored.sort(key=lambda pair: (-pair[1], pair[0].clause_path))
+        return scored[:top_k]
+
+
 class FakeRepository:
     """In-memory Repository for IngestionService unit tests.
 
