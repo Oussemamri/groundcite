@@ -136,12 +136,20 @@ def main() -> int:
         "This worksheet does the mechanical half; **you** sign off on the flagged rows.",
         "It does not, and must not, edit `evals/suites/` (CLAUDE.md rule 13).",
         "",
-        "- **MISSING** — the expected clause is not in the ingested corpus at all. "
+        "- **MISSING** — an expected clause is not in the ingested corpus at all. "
         "The case can never pass; either the clause id is wrong or the corpus is short.",
-        "- **WEAK** — the clause exists, but its ingested text shares little vocabulary "
-        "with the case's `expected_facts`. Usually means the fact lives in a *different* "
-        "clause. Worth a human read.",
-        "- **OK** — clause exists and its text supports the expected facts. No action.",
+        "- **WEAK** — the clauses exist, but their combined ingested text shares little "
+        "vocabulary with the case's `expected_facts`. Usually means the fact actually "
+        "lives in a *different* clause. A triage signal, not a verdict — read it.",
+        "- Cases not listed are OK: their clauses exist and their text supports the facts.",
+        "",
+        "Scoring is per CASE against the UNION of its expected clauses — a cross-clause "
+        "question (spec §8 type 3) spreads its facts across several clauses, so scoring "
+        "each clause against all the facts would flag every correct multi-clause case.",
+        "",
+        "Non-English cases are checked for clause EXISTENCE only: the corpus is English, "
+        "so token overlap against German facts is meaningless. The german suite states "
+        "each case inherits the VERIFY flags of its English source — verify it there.",
         "",
     ]
     total = flagged = 0
@@ -150,45 +158,82 @@ def main() -> int:
         for suite in args.suites:
             cases = _load_cases(suite)
             rows: list[str] = []
+            suite_flags = 0
             for case in cases:
                 if case.get("must_abstain"):
                     continue  # no expected clause by design — nothing to verify
-                expected = list(case.get("expected_clauses", []))
-                facts = list(case.get("expected_facts", []))
+                total += 1
+                expected = [str(c) for c in case.get("expected_clauses", [])]
+                facts = [str(f) for f in case.get("expected_facts", [])]
                 question = str(case.get("question", ""))
+                language = str(case.get("language", "en"))
+
+                # EXISTS is per clause: any missing clause makes the case unpassable.
+                missing: list[str] = []
+                corpus_text: list[str] = []
                 for clause in expected:
-                    total += 1
                     exists, text = _clause_text(conn, args.slug, clause)
-                    fact_toks = _tokens(" ".join(facts))
-                    text_toks = _tokens(text)
-                    overlap = len(fact_toks & text_toks) / len(fact_toks) if fact_toks else 1.0
                     if not exists:
-                        verdict, note = "**MISSING**", "clause not ingested"
-                    elif fact_toks and overlap < 0.5:
-                        verdict, note = "**WEAK**", f"fact overlap {overlap:.0%}"
-                    else:
-                        verdict, note = "OK", f"fact overlap {overlap:.0%}"
-                    if verdict != "OK":
-                        flagged += 1
-                        rows.append(f"| {verdict} | `{clause}` | {note} | {question[:78]} |")
+                        missing.append(clause)
+                    corpus_text.append(text)
+
+                # SUPPORTS is per CASE, against the UNION of its expected clauses:
+                # a cross-clause question (spec §8 type 3) spreads its facts across
+                # several clauses, so scoring each clause against ALL the facts
+                # would flag every correct multi-clause case.
+                fact_toks = _tokens(" ".join(facts))
+                text_toks = _tokens(" ".join(corpus_text))
+                overlap = len(fact_toks & text_toks) / len(fact_toks) if fact_toks else 1.0
+
+                clauses_md = ", ".join(f"`{c}`" for c in expected)
+                if missing:
+                    verdict = "**MISSING**"
+                    note = f"not ingested: {', '.join(missing)}"
+                elif language != "en":
+                    # The corpus is English; these facts are not. Token overlap is
+                    # meaningless across languages, so only EXISTS is checked here.
+                    # (The suite says each German case inherits the VERIFY flags of
+                    # its English source, so verify it there.)
+                    continue
+                elif fact_toks and overlap < 0.5:
+                    verdict, note = "**WEAK**", f"fact overlap {overlap:.0%}"
+                else:
+                    continue  # OK — nothing for a human to do
+                flagged += 1
+                suite_flags += 1
+
+                # The evidence a human needs to actually rule on the flag: which
+                # fact words are absent from the clause text, and what the clause
+                # actually says. Without this a flag is just a number.
+                unmatched = sorted(fact_toks - text_toks)[:14]
+                rows.append(f"### {verdict} — {clauses_md} ({note})")
+                rows.append("")
+                rows.append(f"**Q:** {question}")
+                rows.append("")
+                rows.append("**Expected facts:**")
+                for fact in facts:
+                    rows.append(f"- {fact}")
+                rows.append("")
+                rows.append(f"**Fact words absent from the clause text:** `{', '.join(unmatched)}`")
+                rows.append("")
+                snippet = " ".join(" ".join(corpus_text).split())[:600]
+                rows.append("**Ingested clause text (first 600 chars):**")
+                rows.append("")
+                rows.append(f"> {snippet}…")
+                rows.append("")
             lines += [
-                f"## Suite `{suite}` — {len(cases)} cases, {len(rows)} flagged",
+                f"## Suite `{suite}` — {len(cases)} cases, {suite_flags} flagged",
                 "",
             ]
             if rows:
-                lines += [
-                    "| verdict | expected clause | signal | question |",
-                    "|---|---|---|---|",
-                    *rows,
-                    "",
-                ]
+                lines += [*rows, ""]
             else:
                 lines += ["No flags — every expected clause exists and is supported.", ""]
 
     lines += [
         "---",
         "",
-        f"**{flagged} of {total} expected clauses flagged for human review.**",
+        f"**{flagged} of {total} scorable cases flagged for human review.**",
         "",
         "Reviewing a flag: read the clause's ingested text, decide whether the case's "
         "expected clause is right. Then edit `evals/suites/*.jsonl` **yourself** and "
