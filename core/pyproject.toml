@@ -36,6 +36,14 @@ rerank = ["rerankers>=0.6,<1"]
 [project.scripts]
 groundcite = "groundcite.cli:app"
 
+[tool.pytest.ini_options]
+markers = [
+    # CLAUDE rule 3: unit tests use fake ports (no network, no DB); integration
+    # tests may use the compose Postgres. Integration tests SKIP themselves when
+    # the DB is unreachable, so `uv run pytest` stays green in CI (no DB there).
+    "integration: requires the compose Postgres; auto-skipped when unreachable",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
