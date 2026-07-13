@@ -1,5 +1,16 @@
 # GroundCite — rules for AI-assisted development
 
+0. Working style, framing the rules below (general version: the
+   `karpathy-guidelines` skill):
+   - Think before coding: don't silently pick a reading of the spec or an
+     ambiguous §2.1 term — state it or ask.
+   - Simplicity first: no speculative abstractions, no unrequested config
+     knobs (extends rule 10).
+   - Surgical changes: touch only what the task requires, no drive-by
+     refactors (extends rule 7).
+   - Goal-driven execution: "fix X" → a failing test that then passes
+     (rule 3); "tune Y" → a before/after eval run (rule 4).
+
 1. Read GROUNDCITE_PROJECT_SPEC.md before any task. If a request conflicts
    with the spec, say so and stop.
 2. Dependency rule is law: domain ← ports ← services / adapters ← apps.
