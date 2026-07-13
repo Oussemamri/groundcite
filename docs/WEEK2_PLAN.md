@@ -213,6 +213,21 @@ German outscores English because clause numbers survive translation and fire the
 exact-match fast path; multilingual bge-m3 carries the rest. This is the honest
 starting number (spec §8 honesty rule) — the blog narrative is the improvement.
 
+**Reranker ON vs OFF** (far-25; the `+rerank` tuning step of spec §15, measured
+per CLAUDE.md rule 4):
+
+| suite | metric | rerank OFF | rerank ON | Δ |
+|---|---|---|---|---|
+| core | recall@5 | 0.769 | **0.856** | **+8.7 pts** |
+| core | recall@10 | 0.844 | **0.896** | +5.2 pts |
+| core | MRR | 0.811 | **0.824** | +1.3 pts |
+| german | recall@5 | 0.917 | 0.917 | — |
+| german | MRR | 0.938 | 0.938 | — |
+
+The cross-encoder earns its cost on the English suite. German is unchanged
+because those cases are already solved at rank 1 by the clause fast path, which
+the reranker cannot improve on.
+
 ### FINDING — Gate A cannot be built on RRF (blocks Week 3)
 
 The eval harness earned its place immediately. Measured on the fused scale:
@@ -232,6 +247,28 @@ pressure, fire detection, and bird strike.
 **⇒ The reranker is REQUIRED for Gate A, not optional.** Week 3 must either make
 the reranker mandatory or replace the RRF threshold with a calibrated score.
 Pinned by a unit test so the arithmetic cannot silently drift.
+
+**The reranker largely fixes it — but Gate A still leaks.** Same measurement on
+normalized cross-encoder scores (48 grounded cases, 12 must-abstain):
+
+| | grounded (n=48) | must-abstain (n=12) |
+|---|---|---|
+| min | 0.1364 | 0.0015 |
+| **median** | **0.9485** | **0.0483** |
+| max | 0.9995 | 0.7220 |
+
+A ~20× median gap, versus the RRF scale where the two were *identical*. But the
+tails still overlap (7/48 grounded score at or below the best must-abstain case),
+so **no τ separates them perfectly**. At the spec's `TAU_RETRIEVAL = 0.35`:
+
+- **2/48 grounded** cases would be wrongly ABSTAINED (4%) — acceptable.
+- **3/12 must-abstain** cases would be wrongly ANSWERED (**25%**) — *not*
+  acceptable. GroundCite's core contract (§1) is that it abstains rather than
+  cite wrongly, and a quarter of out-of-corpus questions currently slip through.
+
+Week 3 must tune τ against this distribution (and likely add Gate B's citation
+check as the second line of defence, which is exactly what §7 designs it for).
+τ = 0.35 is a plausible starting point but is NOT safe as-is.
 
 ### Known residual, as predicted (AD-5)
 
