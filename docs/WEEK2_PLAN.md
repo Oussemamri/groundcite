@@ -270,12 +270,43 @@ Week 3 must tune τ against this distribution (and likely add Gate B's citation
 check as the second line of defence, which is exactly what §7 designs it for).
 τ = 0.35 is a plausible starting point but is NOT safe as-is.
 
-### Known residual, as predicted (AD-5)
+### Known residual, as predicted (AD-5) — FIXED post-Week-2
 
-§25.1801 (the SFAR/appendix catch-all) pollutes dense retrieval — it is the rank-1
-hit for "What failure probability is acceptable for catastrophic conditions?",
-which is one of only two complete misses in the core suite. Fixing the SFAR/
-appendix chunking is a separate authorized task and would likely move recall@5.
+The §25.1801 catch-all, the page-furniture pollution, and (found while building
+the golden-set verification worksheet) a print-hyphenation bug affecting 90% of
+chunks were all fixed and re-ingested. Full before/after:
+
+| | original | +appendix/noise fix | **+de-hyphenation (final)** |
+|---|---|---|---|
+| core recall@5 (rerank OFF) | 0.769 | 0.781 | **0.800** |
+| core recall@10 (rerank OFF) | 0.844 | 0.844 | **0.879** |
+| core MRR (rerank OFF) | 0.811 | 0.811 | **0.853** |
+| core recall@5 (rerank ON) | 0.856 | — | **0.863** |
+| core recall@10 (rerank ON) | 0.896 | — | **0.902** |
+| core MRR (rerank ON) | 0.824 | — | **0.850** |
+| german recall@10 (rerank OFF) | 0.917 | 0.917 | **0.958** |
+
+The reranker-OFF number moved the most (+3.1 recall@5, +4.2 MRR) — de-hyphenation
+repairs lexical retrieval directly (`websearch_to_tsquery` can only match whole
+words, and "seconds" had been stored as the tokens "sec" and "onds"). The
+reranker-ON gain is smaller in absolute terms because the cross-encoder was
+already compensating for some of the corpus damage by reading full passages
+rather than relying on exact tokens.
+
+The §25.1309 "catastrophic failure probability" miss present after the appendix
+fix alone is gone post-de-hyphenation; only one core miss remains
+(§25.301/303 — a genuine question/clause vocabulary mismatch, not a corpus defect).
+
+Gate A separability improved but is NOT resolved: with the reranker on,
+overlapping cases dropped 7/48 → 5/48, but at τ=0.35 the must-abstain leak rate
+is unchanged (3/12 = 25%). This confirms the leak is a reranker-calibration /
+Gate-B problem, not a corpus-quality problem — correctly Week 3's to solve.
+
+Golden-set verification worksheet (`scripts/verify_golden_set.py`) run against
+the final corpus: 2/48 scorable cases flagged, both manually reviewed against
+the full ingested text and confirmed FALSE POSITIVES (stemming mismatches —
+"demonstrated" vs "demonstration" — not missing content). Zero MISSING clauses
+across all 60 committed cases.
 
 ## 4. Explicitly OUT of scope for Week 2
 
