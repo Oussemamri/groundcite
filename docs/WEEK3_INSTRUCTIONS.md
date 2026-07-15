@@ -139,14 +139,31 @@ Weeks 0–2 are done and pushed; CI is green on `main`.
 | `deepeval` / `promptfoo` / `giskard` | reject | Alternate judge/eval frameworks; ragas is the spec's choice and the runner is Build. |
 | `tiktoken` | reject | Token usage comes from the provider's `usage` response field. |
 
-**Model names (rule: verify at build time — spec §11 last row).** This file was
-written 2026-07; model catalogs rot. **Answerer provider is settled: Groq only**
-(§1 Phase 0 step 2). Before pinning the `groq_model` config default, check
-Groq's current model list — a reasonable starting point to VERIFY, not trust:
-`llama-3.3-70b-versatile`. Judge metrics are skipped this week (no second
-provider) — do not pin a judge model. `openai_llm.py` / `ollama_llm.py` factories
-still get written per AD-1 (cheap, keeps the port swappable per spec §11) but
-are unexercised — no OpenAI/Ollama model name needs verifying now.
+**Model names (rule: verify at build time — spec §11 last row).** **Answerer
+provider is settled: Groq only** (§1 Phase 0 step 2). Verified live against the
+owner's actual key on 2026-07-15 (`GET /openai/v1/models`, HTTP 200) — 17 models
+available, re-check before you build since this rots fast:
+
+```
+allam-2-7b, canopylabs/orpheus-arabic-saudi, canopylabs/orpheus-v1-english,
+groq/compound, groq/compound-mini, llama-3.1-8b-instant,
+llama-3.3-70b-versatile, meta-llama/llama-4-scout-17b-16e-instruct,
+meta-llama/llama-prompt-guard-2-22m, meta-llama/llama-prompt-guard-2-86m,
+openai/gpt-oss-120b, openai/gpt-oss-20b, openai/gpt-oss-safeguard-20b,
+qwen/qwen3-32b, qwen/qwen3.6-27b, whisper-large-v3, whisper-large-v3-turbo
+```
+
+Candidates worth an eval-off before picking `groq_model`'s default: 
+`llama-3.3-70b-versatile` (the spec's original guess, still present),
+`openai/gpt-oss-120b`, and `meta-llama/llama-4-scout-17b-16e-instruct` (all
+newer/plausibly stronger — don't default to the spec's guess without checking).
+Ignore `whisper-*` (audio) and `*-prompt-guard-*` (a moderation classifier, not
+a general chat model) — neither fits the §7 generation contract. Pick with
+recall/citation numbers from Phase 6, not a guess. Judge metrics are skipped
+this week (no second provider) — do not pin a judge model. `openai_llm.py` /
+`ollama_llm.py` factories still get written per AD-1 (cheap, keeps the port
+swappable per spec §11) but are unexercised — no OpenAI/Ollama model name needs
+verifying now.
 
 ---
 
