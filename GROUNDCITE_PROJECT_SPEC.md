@@ -374,6 +374,7 @@ Rules: routes are thin (parse → service → serialize); pydantic response mode
 | Embedding/reranker inference | **FlagEmbedding** (bge-m3, `normalize=True` reranker scores feed τ_retrieval) | canonical BGE package, MIT | sentence-transformers |
 | Reranker abstraction | **rerankers** (AnswerDotAI) | unified API, zero deps; our Reranker port wraps it | direct FlagEmbedding |
 | Eval judge metrics | **Ragas** (faithfulness, context precision ONLY) | canonical, academically grounded | DeepEval |
+| LLM client (all 3 generation providers) | **`openai` SDK** — one OpenAI-compatible client serves Groq (`api.groq.com/openai/v1`), OpenAI, and Ollama (`localhost:11434/v1`) | zero custom SSE/HTTP; §11.1 "model inference (generate)" = Buy; port stays swappable | hand-rolled httpx streaming |
 | Python tooling | uv, ruff, mypy(strict core), pytest, Alembic | modern, fast | — |
 | Verify model names + library versions at build time — this landscape changes monthly. Pin everything. | | | |
 

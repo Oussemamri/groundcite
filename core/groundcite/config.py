@@ -12,10 +12,17 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 EmbeddingProviderName = Literal["bge_m3", "openai"]
 LLMProviderName = Literal["groq", "openai", "ollama"]
+
+# A model's per-million-token price in USD (spec §12 cost, AD-6). One entry per
+# model name → {"prompt": USD/M input, "completion": USD/M output}. Used by the
+# container to compute ``asks.cost_usd`` ONLY when the active model has an entry
+# here; otherwise cost stays NULL — a number is never faked (AD-6).
+ModelPrice = dict[str, float]
 
 # config.py -> groundcite/ -> core/ -> repo root. Derived (not a cwd-relative
 # path) so `groundcite eval run` finds the committed suites from any directory.
@@ -55,6 +62,36 @@ class Settings(BaseSettings):
     openai_api_key: str | None = None
     groq_api_key: str | None = None
     ollama_base_url: str = "http://localhost:11434"
+
+    # --- LLM generation models (AD-1; spec §17 rule 9: model names live ONLY in
+    # these config defaults, never in code). One OpenAI-compatible client serves
+    # all three providers. The Groq default is the spec §11 guess, still present
+    # in the live catalog on 2026-07-15 (17 models); Phase 6 re-evaluates the
+    # candidate set (llama-3.3-70b-versatile / openai/gpt-oss-120b /
+    # meta-llama/llama-4-scout-17b-16e-instruct) with real citation numbers and
+    # may change this default in a measured commit. The openai/ollama factories
+    # are written per AD-1 but UNEXERCISED this week — their names are not
+    # verified against a live provider now (spec §11 last row).
+    groq_model: str = "llama-3.3-70b-versatile"
+    openai_model: str = "gpt-4o-mini"
+    ollama_model: str = "llama3.1"
+    # Groq's OpenAI-compatible base URL (AD-1). OpenAI LLC base URL is the SDK
+    # default; Ollama's is ``ollama_base_url`` above + ``/v1``.
+    groq_base_url: str = "https://api.groq.com/openai/v1"
+
+    # --- judge (evals only, AD-7) ---
+    # Judge metrics are SKIPPED this week (Phase 0 step 2b: only Groq is
+    # configured, spec §11 requires judge ≠ answerer). Left None so the eval
+    # runner's --judge path is a no-op (judge columns NULL) rather than a
+    # broken cross-provider call. Pinned when a second provider arrives.
+    judge_provider: LLMProviderName | None = None
+    judge_model: str | None = None
+
+    # --- per-call cost (spec §12, AD-6) ---
+    # Optional price map; empty → cost_usd is NULL (never faked). Parsed from a
+    # JSON env var MODEL_PRICES, e.g.
+    # {"llama-3.3-70b-versatile":{"prompt":0.59,"completion":0.79}}
+    model_prices: dict[str, ModelPrice] = Field(default_factory=dict)
 
     # --- retrieval tunables (defaults from spec §7; tune with evals) ---
     tau_retrieval: float = 0.35

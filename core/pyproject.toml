@@ -32,6 +32,19 @@ embed = [
 # step 3). The Reranker port wraps AnswerDotAI's `rerankers` (spec §11 table);
 # heavy (pulls torch), so it stays an extra and the adapter imports it lazily.
 rerank = ["rerankers>=0.6,<1"]
+# `pip install groundcite[llm]` — one OpenAI-compatible client (the `openai`
+# SDK) serves ALL THREE generation providers: Groq (https://api.groq.com/openai/v1),
+# OpenAI, and Ollama (http://localhost:11434/v1), per AD-1. Zero custom SSE/HTTP
+# plumbing; spec §11.1 puts "model inference (generate)" under Buy. Imported
+# lazily inside the adapter so CI (no extras) stays green. Pinned (§17 rule 12).
+llm = ["openai>=1.50,<2"]
+# `pip install groundcite[judge]` — Ragas for LLM-judge metrics ONLY (spec §11,
+# §11.1 "judge-metric math"): faithfulness + context precision. Imported lazily
+# inside the judge adapter, never in services. ⚠️ It pulls langchain-core
+# transitively, acceptable ONLY because the spec names ragas; the import is
+# quarantined in this extra. If it proves flaky the pre-approved fallback is a
+# hand-rolled judge prompt (spec §11.1 keeps prompts as Build). Pinned (§12).
+judge = ["ragas>=0.2,<1"]
 
 [project.scripts]
 groundcite = "groundcite.cli:app"
@@ -107,6 +120,7 @@ module = [
     "groundcite.adapters.tokencount.bge_m3_tokencount",
     "groundcite.adapters.parser.pymupdf_parser",
     "groundcite.adapters.reranker.bge_reranker",
+    "groundcite.adapters.llm.openai_compatible",
 ]
 ignore_missing_imports = true
 disallow_untyped_calls = false
