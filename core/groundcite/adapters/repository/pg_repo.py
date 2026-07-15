@@ -20,7 +20,7 @@ from uuid import UUID
 import psycopg
 
 from groundcite.domain.entities import Ask, Chunk, Document, EvalCase, Section
-from groundcite.domain.results import EvalRun
+from groundcite.domain.results import AskStatus, Citation, EvalRun
 
 
 class PgRepository:
@@ -161,10 +161,12 @@ class PgRepository:
             ).fetchone()
         return _chunk_from_row(row) if row else None
 
-    # --- asks / citations ------------------------------------------------
+    # --- asks / citations (one transaction, AD-6) --------------------------------
 
-    def save_ask(self, ask: Ask) -> None:
-        with self._connect() as conn:
+    def save_ask(self, ask: Ask, citations: Sequence[Citation]) -> None:
+        # One transaction writing the ask row + its citation rows (rank, score
+        # from the final context ranking, AD-6). An abstention has no citations.
+        with self._connect() as conn, conn.transaction():
             conn.execute(
                 """INSERT INTO asks
                      (id, question, status, answer_md, confidence, latency_ms,
@@ -182,10 +184,17 @@ class PgRepository:
                     ask.created_at,
                 ),
             )
+            if citations:
+                with conn.cursor() as cur:
+                    cur.executemany(
+                        """INSERT INTO citations (ask_id, chunk_id, rank, score)
+                           VALUES (%s,%s,%s,%s)
+                           ON CONFLICT (ask_id, chunk_id) DO UPDATE
+                              SET rank = EXCLUDED.rank, score = EXCLUDED.score""",
+                        [(ask.id, c.chunk_id, c.rank, c.score) for c in citations],
+                    )
 
     def get_ask(self, ask_id: UUID) -> Ask | None:
-        from groundcite.domain.results import AskStatus
-
         with self._connect() as conn:
             row = conn.execute(
                 """SELECT id, question, status, answer_md, confidence, latency_ms,

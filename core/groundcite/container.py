@@ -95,6 +95,10 @@ def build_services(settings: Settings) -> Services:
         context_k=settings.context_k,
         llm=_build_llm(settings),
         tau_retrieval=settings.tau_retrieval,
+        repository=repository,
+        # AD-6 cost map: {'model': (prompt_usd_per_1M, completion_usd_per_1M)}.
+        # Empty by default → ask() leaves cost_usd NULL (never fakes a number).
+        model_prices={m: (p["prompt"], p["completion"]) for m, p in settings.model_prices.items()},
     )
 
     return Services(

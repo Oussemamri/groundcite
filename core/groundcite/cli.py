@@ -11,6 +11,7 @@ from __future__ import annotations
 import json as json_lib
 import subprocess
 from pathlib import Path
+from typing import cast
 
 import typer
 
@@ -19,6 +20,9 @@ from groundcite.config import get_settings
 from groundcite.container import build_services
 from groundcite.domain.entities import DocumentMeta
 from groundcite.domain.results import (
+    AskEvent,
+    AskEventType,
+    AskStatus,
     IngestionReport,
     RetrievalEvalReport,
     RetrievalResult,
@@ -106,23 +110,84 @@ def ask(
     rerank: bool = typer.Option(
         None, "--rerank/--no-rerank", help="Override RERANKER_ENABLED for this ask"
     ),
+    retrieval_only: bool = typer.Option(
+        False,
+        "--retrieval-only",
+        help="Skip generation; print ranked passages only (spec §15 Week 2 mode)",
+    ),
 ) -> None:
     """Ask a grounded question (spec §7).
 
-    Week 2 is RETRIEVAL-ONLY (spec §15): it prints the top-k passages with their
-    scores. Generation and the abstention gates arrive in Week 3.
+    Full mode (default, Week 3): retrieval → Gates A/B → streamed generation →
+    citations. Requires an LLM provider and RERANKER_ENABLED=true (Gate A needs
+    the normalized reranker score — AD-3). ``--retrieval-only`` runs just the
+    Week-2 retrieval half and prints ranked passages with scores, no LLM call.
     """
     settings = get_settings()
     if rerank is not None:
         settings = settings.model_copy(update={"reranker_enabled": rerank})
 
     services = build_services(settings)
-    result = services.ask.retrieve(question, document_slugs=slug or None, top_k=top_k)
 
-    if json_out:
-        typer.echo(result.model_dump_json(indent=2))
+    if retrieval_only:
+        result = services.ask.retrieve(question, document_slugs=slug or None, top_k=top_k)
+        if json_out:
+            typer.echo(result.model_dump_json(indent=2))
+            return
+        typer.echo(_format_retrieval(result))
         return
-    typer.echo(_format_retrieval(result))
+
+    events = list(services.ask.ask(question, document_slugs=slug or None))
+    terminal = next(
+        (e for e in reversed(events) if e.type in (AskEventType.FINAL, AskEventType.ERROR)),
+        None,
+    )
+    if json_out:
+        typer.echo(json_lib.dumps(terminal.data if terminal else {}, indent=2))
+        return
+
+    typer.echo(f"Q: {question}")
+    for event in events:
+        if event.type is AskEventType.STAGE:
+            typer.echo(f"   [{event.data['stage']}]")
+        elif event.type is AskEventType.TOKEN:
+            typer.echo(str(event.data["token"]), nl=False)
+    typer.echo()
+    typer.echo()
+    typer.echo(_format_final(terminal) if terminal else "(no terminal event — this is a bug)")
+
+
+def _format_final(event: AskEvent) -> str:
+    """Render the terminal FINAL/ERROR event of a full-mode ask() (spec §7).
+
+    ``event.data`` is ``dict[str, object]`` (the SSE contract's type, shared with
+    apps/api); the nested shapes here are guaranteed by ``AskService.ask`` in the
+    SAME process (``Answer``/``Abstention``/``Citation``/``RetrievedChunk``
+    ``model_dump(mode="json")``), so a ``cast`` — not a defensive re-validation —
+    is the honest way to display them.
+    """
+    if event.type is AskEventType.ERROR:
+        return f"ERROR: {event.data['message']}"
+
+    status = str(event.data["status"])
+    lines = [f"status: {status.upper()}"]
+    if status == AskStatus.GROUNDED.value:
+        answer = cast(dict[str, object], event.data["answer"])
+        lines += ["", str(answer["answer_md"]), "", "citations:"]
+        for raw_c in cast(list[dict[str, object]], answer["citations"]):
+            label = raw_c.get("clause_path") or raw_c["chunk_id"]
+            score = cast(float, raw_c["score"])
+            lines.append(f"  [{raw_c['rank']}] {label}  score={score:.4f}")
+    else:
+        abstention = cast(dict[str, object], event.data["abstention"])
+        lines.append(f"reason: {abstention['reason']}")
+        passages = cast(list[dict[str, object]], abstention.get("top_passages") or [])
+        if passages:
+            lines += ["", "closest passages:"]
+            for p in passages:
+                lines.append(f"  {p['clause_path']}  score={cast(float, p['score']):.4f}")
+    lines += ["", f"latency: {event.data['latency_ms']}ms   ask_id: {event.data['ask_id']}"]
+    return "\n".join(lines)
 
 
 def _format_retrieval(r: RetrievalResult) -> str:

@@ -59,7 +59,7 @@ class OpenAICompatibleLLM:
         self._client: Any = None  # opened on first stream, cached on the instance
 
     @property
-    def model(self) -> str:
+    def model_name(self) -> str:
         return self._model
 
     @property

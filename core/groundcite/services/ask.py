@@ -1,58 +1,74 @@
 """AskService — the retrieval → gate → generate → gate pipeline (spec §7).
 
-Week 2 implements the RETRIEVAL half, as a first-class, LLM-free entry point:
+Week 2 implemented the retrieval half (``retrieve``), LLM-free, so evals can score
+retrieval without a judge or answerer (§8 "most stable CI signal"). Week 3 layers
+``ask()`` on top of the SAME ``retrieve`` (AD-2 — no duplication of the retrieval
+steps): a generator of ``AskEvent``s.
 
-    retrieve(question, document_slugs) -> RetrievalResult      # steps 0-3
+    STAGE(retrieving) → retrieve() → STAGE(reranking) → Gate A → STAGE(generating)
+    → TOKEN* → parse → [repair] → Gate B → CITATIONS → persist → FINAL (or ERROR)
 
-    [0]  clause-ID detection            (services/clause_detect)
-    [1a] dense candidates    top-30     (VectorIndex, cosine/HNSW)
-    [1b] lexical candidates  top-30     (LexicalIndex, ts_rank_cd)
-    [1c] clause fast path               (LexicalIndex.match_clause) — rank 1
-    [2]  RRF fusion          top-20     (services/fusion)
-    [3]  rerank (optional)   top-6      (Reranker)
-
-``retrieve`` is deliberately generation-free and takes no LLM port. That is a
-structural requirement, not a convenience: spec §8 scores retrieval with
-recall@k / MRR and calls retrieval-only cases "the most stable CI signal", so
-EvalService must be able to measure retrieval WITHOUT invoking a judge or an
-answerer. Week 3's ``ask()`` (Gate A → generate → Gate B → stream AskEvents)
-calls this same method and adds the generation half on top.
+Gate A (AD-3): abstain when the top NORMALIZED RERANKER score < τ_retrieval — so
+generation mode REQUIRES the reranker (RRF cannot separate grounded from
+must-abstain, §1 evidence). An exact clause-ID match (spec §7 step 1c) bypasses
+τ by construction: the user asked for a specific clause we hold.
+Gate B (AD-5): every cited chunk_id ∈ the provided context set and ≥1 citation
+per answer paragraph; one repair retry, then ABSTAIN(reason=UNCITED).
+Mapping (AD-4): ``insufficient: true`` → ABSTAIN(reason=WEAK_RETRIEVAL); a
+citation-validity failure → ABSTAIN(reason=UNCITED).
 
 Everything here is orchestration over injected ports — no adapter imports, no
-config import (spec §4 dependency rule).
+config import (spec §4 dependency rule). Cost uses the injected price map and
+the LLM's ``model_name``; an unpriced model → ``cost_usd`` NULL (AD-6).
 """
 
 from __future__ import annotations
 
 import time
-from collections.abc import Sequence
+from collections.abc import Generator, Iterator, Mapping, Sequence
+from datetime import UTC, datetime
+from decimal import Decimal
+from uuid import UUID, uuid4
 
-from groundcite.domain.entities import Chunk
-from groundcite.domain.results import RetrievalResult, RetrievedChunk
+from groundcite.domain.entities import Ask, Chunk
+from groundcite.domain.results import (
+    Abstention,
+    AbstentionReason,
+    Answer,
+    AskEvent,
+    AskEventType,
+    AskStatus,
+    Citation,
+    RetrievalResult,
+    RetrievedChunk,
+    TokenUsage,
+)
 from groundcite.ports.protocols import (
     EmbeddingProvider,
     LexicalIndex,
     LLMProvider,
+    Repository,
     Reranker,
     VectorIndex,
 )
+from groundcite.services.answer_parse import ParsedAnswer, ParseError, RawCitation, parse_answer
 from groundcite.services.clause_detect import detect_clause_ids
 from groundcite.services.fusion import fuse
+from groundcite.services.lang_detect import detect_language
+from groundcite.services.metrics import matches
+from groundcite.services.prompts.answerer import (
+    SYSTEM_PROMPT,
+    chunk_id_set,
+    render_repair,
+    render_user,
+)
+
+# Per-million-token divisor for cost (prices in USD / 1M tokens).
+_PER_MILLION = Decimal("1000000")
 
 
 class AskService:
-    """Resolve one Ask into a grounded Answer or a first-class Abstention (spec §7).
-
-    Week 2 implemented the retrieval half (``retrieve``). Week 3 layers
-    ``ask()`` (Gate A → generate → Gate B → stream AskEvents) on top of the
-    SAME ``retrieve`` — no duplication of the retrieval steps.
-
-    ``llm`` and ``tau_retrieval`` are optional here only so the retrieval-only
-    unit tests (Week 2) and the retrieval-only eval path can construct this
-    service without a generator; ``ask()`` (Week 3) requires ``llm`` set and
-    raises at call time if it or the reranker (Gate A gates on its normalized
-    score — AD-3) is missing.
-    """
+    """Resolve one Ask into a grounded Answer or a first-class Abstention (spec §7)."""
 
     def __init__(
         self,
@@ -68,6 +84,8 @@ class AskService:
         context_k: int = 6,
         llm: LLMProvider | None = None,
         tau_retrieval: float = 0.35,
+        repository: Repository | None = None,
+        model_prices: Mapping[str, tuple[float, float]] | None = None,
     ) -> None:
         self._embedder = embedder
         self._vector = vector_index
@@ -79,9 +97,13 @@ class AskService:
         self._candidates_lexical = candidates_lexical
         self._fused_k = fused_k
         self._context_k = context_k
-        # Generation half (Week 3). None ⇒ ask() raises; retrieve() ignores them.
+        # Generation half (Week 3). None ⇒ ask() raises (AD-1/AD-3); retrieve() ignores them.
         self._llm = llm
         self._tau_retrieval = tau_retrieval
+        self._repository = repository
+        self._model_prices = model_prices or {}
+
+    # --- retrieval half (Week 2, unchanged) -----------------------------------
 
     def retrieve(
         self,
@@ -150,6 +172,321 @@ class AskService:
             },
         )
 
+    # --- generation half (Week 3) ---------------------------------------------
+
+    def ask(
+        self,
+        question: str,
+        document_slugs: Sequence[str] | None = None,
+    ) -> Iterator[AskEvent]:
+        """Full §7 pipeline → a stream of ``AskEvent``s (AD-2). One terminal
+        event (FINAL or ERROR) last. Raises a config error at call time if the
+        prerequisites for full mode are missing (AD-1/AD-3)."""
+        if self._llm is None:
+            raise RuntimeError(
+                "ask() requires an LLM provider (AD-1); the container did not wire one."
+            )
+        if self._reranker is None:
+            raise RuntimeError(
+                "Generation mode requires the normalized reranker score for Gate A "
+                "(AD-3): set RERANKER_ENABLED=true. Use `groundcite ask --retrieval-only` "
+                "to run retrieval without generating."
+            )
+        return self._ask_events(question, document_slugs)
+
+    def _ask_events(
+        self, question: str, document_slugs: Sequence[str] | None
+    ) -> Iterator[AskEvent]:
+        try:
+            yield from self._run(question, document_slugs)
+        except Exception as exc:
+            yield _event(AskEventType.ERROR, {"message": str(exc)})
+
+    def _run(self, question: str, document_slugs: Sequence[str] | None) -> Generator[AskEvent]:
+        started = time.perf_counter()
+        yield _event(AskEventType.STAGE, {"stage": "retrieving"})
+
+        retrieval = self.retrieve(question, document_slugs=document_slugs)
+        yield _event(AskEventType.STAGE, {"stage": "reranking"})
+
+        chunks = retrieval.chunks
+        top_score = chunks[0].score if chunks else 0.0
+
+        # Gate A: abstain on weak retrieval, unless the user named a clause we hold.
+        has_exact_clause = bool(retrieval.clause_ids) and any(
+            matches(c.clause_path, cid) for c in chunks for cid in retrieval.clause_ids
+        )
+        if not chunks or (not has_exact_clause and top_score < self._tau_retrieval):
+            yield from self._emit_abstain(AbstentionReason.WEAK_RETRIEVAL, retrieval, started, None)
+            return
+
+        # Generation.
+        yield _event(AskEventType.STAGE, {"stage": "generating"})
+        language = detect_language(question)
+        valid_ids = chunk_id_set(chunks)
+        llm = self._llm
+        assert llm is not None  # checked by ask()
+
+        text, usage = yield from self._stream(
+            llm, SYSTEM_PROMPT, render_user(question, chunks, language)
+        )
+        parsed = parse_answer(text)
+
+        # Parse repair (AD-4): one retry, then UNCITED.
+        if isinstance(parsed, ParseError):
+            text, usage, parsed = yield from self._repair(
+                llm, question, chunks, language, parsed.detail
+            )
+            if isinstance(parsed, ParseError):
+                yield from self._emit_abstain(
+                    AbstentionReason.UNCITED, retrieval, started, usage, "parse failed after repair"
+                )
+                return
+
+        # insufficient: the model confirmed the context cannot answer (AD-4 → WEAK_RETRIEVAL).
+        if parsed.insufficient:
+            yield from self._emit_abstain(
+                AbstentionReason.WEAK_RETRIEVAL,
+                retrieval,
+                started,
+                usage,
+                "insufficient context",
+            )
+            return
+
+        # Gate B (AD-5): valid chunk ids + ≥1 citation per paragraph; one repair, then UNCITED.
+        gate_b = _gate_b(parsed, valid_ids)
+        if gate_b is not None:
+            text, usage, parsed = yield from self._repair(llm, question, chunks, language, gate_b)
+            if isinstance(parsed, ParseError):
+                yield from self._emit_abstain(
+                    AbstentionReason.UNCITED, retrieval, started, usage, "repair was unparseable"
+                )
+                return
+            if parsed.insufficient:
+                yield from self._emit_abstain(
+                    AbstentionReason.WEAK_RETRIEVAL,
+                    retrieval,
+                    started,
+                    usage,
+                    "insufficient after repair",
+                )
+                return
+            gate_b = _gate_b(parsed, valid_ids)
+            if gate_b is not None:
+                yield from self._emit_abstain(
+                    AbstentionReason.UNCITED, retrieval, started, usage, gate_b
+                )
+                return
+
+        # Grounded.
+        assert isinstance(parsed, ParsedAnswer)
+        citations = _ranked_citations(parsed.citations, chunks)
+        answer = Answer(
+            answer_md=parsed.answer_md,
+            citations=citations,
+            insufficient=False,
+            confidence=top_score,
+        )
+        usage_eff = usage or TokenUsage(prompt_tokens=0, completion_tokens=0)
+        cost = self._cost(usage_eff, llm.model_name)
+        latency_ms = int(_ms_since(started))
+        yield _event(
+            AskEventType.CITATIONS,
+            {
+                "citations": [c.model_dump(mode="json") for c in citations],
+                "answer_md": answer.answer_md,
+            },
+        )
+        ask_row = Ask(
+            id=uuid4(),
+            question=question,
+            status=AskStatus.GROUNDED,
+            answer_md=answer.answer_md,
+            confidence=top_score,
+            latency_ms=latency_ms,
+            cost_usd=cost,
+            pipeline_debug=self._debug(
+                retrieval, usage_eff, latency_ms, top_score, "grounded", None
+            ),
+            created_at=datetime.now(UTC),
+        )
+        if self._repository is not None:
+            self._repository.save_ask(ask_row, citations)
+        yield _event(
+            AskEventType.FINAL,
+            {
+                "status": AskStatus.GROUNDED.value,
+                "answer": answer.model_dump(mode="json"),
+                "usage": usage_eff.model_dump(mode="json"),
+                "ask_id": str(ask_row.id),
+                "latency_ms": latency_ms,
+            },
+        )
+
+    def _emit_abstain(
+        self,
+        reason: AbstentionReason,
+        retrieval: RetrievalResult,
+        started: float,
+        usage: TokenUsage | None,
+        note: str | None = None,
+    ) -> Generator[AskEvent]:
+        top_passages = tuple(retrieval.chunks[: self._context_k])
+        confidence = retrieval.chunks[0].score if retrieval.chunks else None
+        abst = Abstention(reason=reason, confidence=confidence, top_passages=top_passages)
+        usage_eff = usage or TokenUsage(prompt_tokens=0, completion_tokens=0)
+        cost = (
+            self._cost(usage_eff, self._llm.model_name)
+            if (usage is not None and self._llm is not None)
+            else None
+        )
+        latency_ms = int(_ms_since(started))
+        yield _event(
+            AskEventType.CITATIONS,
+            {
+                "citations": [],
+                "abstention": True,
+                "reason": reason.value,
+                "top_passages": [p.model_dump(mode="json") for p in top_passages],
+            },
+        )
+        ask_row = Ask(
+            id=uuid4(),
+            question=retrieval.question,
+            status=AskStatus.ABSTAINED,
+            answer_md=None,
+            confidence=confidence,
+            latency_ms=int(_ms_since(started)),
+            cost_usd=cost,
+            pipeline_debug=self._debug(
+                retrieval, usage_eff, latency_ms, confidence, "abstained", note
+            ),
+            created_at=datetime.now(UTC),
+        )
+        if self._repository is not None:
+            self._repository.save_ask(ask_row, [])
+        yield _event(
+            AskEventType.FINAL,
+            {
+                "status": AskStatus.ABSTAINED.value,
+                "abstention": abst.model_dump(mode="json"),
+                "usage": usage_eff.model_dump(mode="json"),
+                "ask_id": str(ask_row.id),
+                "latency_ms": latency_ms,
+            },
+        )
+
+    def _stream(
+        self, llm: LLMProvider, system: str, user: str
+    ) -> Generator[AskEvent, None, tuple[str, TokenUsage]]:
+        """Stream the generator, yielding TOKEN events; RETURN (text, usage)."""
+        gen = llm.stream(system, user)
+        text = ""
+        usage = TokenUsage(prompt_tokens=0, completion_tokens=0)
+        while True:
+            try:
+                token = next(gen)
+            except StopIteration as stop:
+                if stop.value is not None:
+                    usage = stop.value
+                break
+            text += token
+            yield _event(AskEventType.TOKEN, {"token": token})
+        return text, usage
+
+    def _repair(
+        self,
+        llm: LLMProvider,
+        question: str,
+        chunks: tuple[RetrievedChunk, ...],
+        language: str,
+        critique: str,
+    ) -> Generator[AskEvent, None, tuple[str, TokenUsage, ParsedAnswer | ParseError]]:
+        """One repair retry (AD-4/AD-5): re-stream with the critique. RETURN parsed too."""
+        text, usage = yield from self._stream(
+            llm, SYSTEM_PROMPT, render_repair(question, chunks, language, critique)
+        )
+        return text, usage, parse_answer(text)
+
+    def _cost(self, usage: TokenUsage, model_name: str) -> Decimal | None:
+        """Per-call USD (AD-6): only when the model has a price entry, else NULL."""
+        price = self._model_prices.get(model_name)
+        if price is None:
+            return None
+        prompt_per_m, completion_per_m = price
+        total = (
+            Decimal(usage.prompt_tokens) * Decimal(str(prompt_per_m)) / _PER_MILLION
+            + Decimal(usage.completion_tokens) * Decimal(str(completion_per_m)) / _PER_MILLION
+        )
+        return total.quantize(Decimal("0.00001"))
+
+    def _debug(
+        self,
+        retrieval: RetrievalResult,
+        usage: TokenUsage,
+        latency_ms: int,
+        confidence: float | None,
+        status: str,
+        note: str | None,
+    ) -> dict[str, object]:
+        debug: dict[str, object] = dict(retrieval.pipeline_debug)
+        debug["status"] = status
+        debug["latency_ms"] = latency_ms
+        debug["confidence"] = confidence
+        debug["usage"] = {
+            "prompt_tokens": usage.prompt_tokens,
+            "completion_tokens": usage.completion_tokens,
+        }
+        if self._reranker is not None:
+            debug["model"] = self._llm.model_name if self._llm is not None else None
+        if note is not None:
+            debug["note"] = note
+        return debug
+
+
+# --- helpers -----------------------------------------------------------------
+
+
+def _gate_b(parsed: ParsedAnswer, valid_ids: frozenset[str]) -> str | None:
+    """Validate the §7 step-6 citation contract (AD-5). None ⇒ ok; else a critique."""
+    invalid = [c.chunk_id for c in parsed.citations if c.chunk_id not in valid_ids]
+    if invalid:
+        return (
+            "These cited chunk_ids are not in the provided context: "
+            + ", ".join(invalid)
+            + ". Cite only ids present in the context."
+        )
+    paragraphs = [p for p in parsed.answer_md.split("\n\n") if p.strip()]
+    if len(parsed.citations) < len(paragraphs):
+        return (
+            f"Every answer paragraph needs at least one citation; your answer has "
+            f"{len(paragraphs)} paragraph(s) and {len(parsed.citations)} citation(s)."
+        )
+    if paragraphs and not parsed.citations:
+        return "The answer has paragraphs but no citations."
+    return None
+
+
+def _ranked_citations(
+    raw: Sequence[RawCitation], chunks: tuple[RetrievedChunk, ...]
+) -> tuple[Citation, ...]:
+    """Map parsed RawCitations → domain Citations with rank + retrieval score."""
+    by_id = {str(c.chunk_id): c for c in chunks}
+    out: list[Citation] = []
+    for rank, rc in enumerate(raw, start=1):
+        chunk = by_id.get(rc.chunk_id)
+        out.append(
+            Citation(
+                chunk_id=UUID(rc.chunk_id),
+                rank=rank,
+                score=chunk.score if chunk is not None else 0.0,
+                claim=rc.claim or None,
+                clause_path=chunk.clause_path if chunk is not None else None,
+            )
+        )
+    return tuple(out)
+
 
 def _retrieved(chunk: Chunk, score: float) -> RetrievedChunk:
     return RetrievedChunk(
@@ -158,6 +495,10 @@ def _retrieved(chunk: Chunk, score: float) -> RetrievedChunk:
         content=chunk.content,
         score=score,
     )
+
+
+def _event(event_type: AskEventType, data: dict[str, object]) -> AskEvent:
+    return AskEvent(type=event_type, data=data)
 
 
 def _ms_since(started: float) -> float:

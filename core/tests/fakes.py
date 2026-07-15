@@ -10,7 +10,7 @@ from collections.abc import Generator, Sequence
 from uuid import UUID
 
 from groundcite.domain.entities import Ask, Chunk, Document, EvalCase, Section
-from groundcite.domain.results import EvalRun, TokenUsage
+from groundcite.domain.results import Citation, EvalRun, TokenUsage
 from groundcite.ports.protocols import Vector
 
 # A dense embedding vector the chunk store will actually use (1024-d), so fake
@@ -127,6 +127,9 @@ class FakeLLM:
         responses: str | Sequence[str] | None = None,
         usages: TokenUsage | Sequence[TokenUsage] | None = None,
     ) -> None:
+        # model_name mirrors the OpenAICompatibleLLM port (AD-1); feeds the
+        # eval config snapshot + cost lookup in the fake-LLM tests.
+        self.model_name: str = "fake-model"
         if isinstance(responses, str):
             self._responses: list[str] = [responses]
         else:
@@ -165,6 +168,7 @@ class FakeRepository:
         self.sections: dict[str, list[Section]] = {}
         self.chunks: dict[str, list[Chunk]] = {}
         self.asks: dict[UUID, Ask] = {}
+        self.citations: dict[UUID, list[Citation]] = {}
         self.eval_runs: dict[UUID, EvalRun] = {}
         self.replace_calls: int = 0
 
@@ -216,8 +220,9 @@ class FakeRepository:
                     return c
         return None
 
-    def save_ask(self, ask: Ask) -> None:
+    def save_ask(self, ask: Ask, citations: Sequence[Citation]) -> None:
         self.asks[ask.id] = ask
+        self.citations[ask.id] = list(citations)
 
     def get_ask(self, ask_id: UUID) -> Ask | None:
         return self.asks.get(ask_id)

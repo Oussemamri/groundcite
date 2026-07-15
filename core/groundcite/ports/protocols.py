@@ -20,7 +20,7 @@ from groundcite.domain.entities import (
     ParsedDocument,
     Section,
 )
-from groundcite.domain.results import EvalRun, TokenUsage
+from groundcite.domain.results import Citation, EvalRun, TokenUsage
 
 # A dense embedding vector. Dimension is fixed at 1024 (bge-m3) and locked —
 # changing it means a full re-embed (spec §5, §11, prep task P4).
@@ -63,6 +63,12 @@ class LLMProvider(Protocol):
     """
 
     def stream(self, system: str, user: str) -> Generator[str, None, TokenUsage]: ...
+
+    @property
+    def model_name(self) -> str:
+        """The configured model id (AD-1). Feeds per-call ``cost_usd`` (AD-6) and
+        the eval config snapshot — never a hardcoded model name in services."""
+        ...
 
 
 @runtime_checkable
@@ -181,7 +187,9 @@ class Repository(Protocol):
     def get_chunk(self, chunk_id: UUID) -> Chunk | None: ...
 
     # --- asks / citations ---
-    def save_ask(self, ask: Ask) -> None: ...
+    def save_ask(self, ask: Ask, citations: Sequence[Citation]) -> None:
+        """Persist one ask row + its citation rows in one transaction (AD-6).
+        ``citations`` may be empty (abstentions have no citations)."""
 
     def get_ask(self, ask_id: UUID) -> Ask | None: ...
 

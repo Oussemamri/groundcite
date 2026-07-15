@@ -83,21 +83,23 @@ def _consume(gen: Any) -> tuple[str, Any]:
 
 def test_groq_factory_binds_groq_base_url_and_model() -> None:
     llm = make_groq_llm(
-        api_key="k", model="llama-3.3-70b-versatile", base_url="https://api.groq.com/openai/v1"
+        api_key="k",
+        model="llama-3.3-70b-versatile",
+        base_url="https://api.groq.com/openai/v1",
     )
-    assert llm.model == "llama-3.3-70b-versatile"
+    assert llm.model_name == "llama-3.3-70b-versatile"
     assert llm.base_url == "https://api.groq.com/openai/v1"
 
 
 def test_openai_factory_leaves_sdk_default_base_url() -> None:
     llm = make_openai_llm(api_key="k", model="gpt-4o-mini")
-    assert llm.model == "gpt-4o-mini"
+    assert llm.model_name == "gpt-4o-mini"
     assert llm.base_url is None, "None ⇒ the SDK's api.openai.com default"
 
 
 def test_ollama_factory_appends_v1_and_placeholder_key() -> None:
     llm = make_ollama_llm(base_url="http://localhost:11434", model="llama3.1")
-    assert llm.model == "llama3.1"
+    assert llm.model_name == "llama3.1"
     assert llm.base_url == "http://localhost:11434/v1"
 
 
@@ -105,11 +107,10 @@ def test_container_builds_groq_adapter_by_default() -> None:
     """Provider selection by config: LLM_PROVIDER=groq wires the groq factory."""
     from groundcite.container import _build_llm
 
-    # The default Settings has llm_provider='groq'; set a known model + key.
     s = Settings(groq_api_key="k", groq_model="llama-3.3-70b-versatile")
     llm = _build_llm(s)
     assert isinstance(llm, oc.OpenAICompatibleLLM)
-    assert llm.model == "llama-3.3-70b-versatile"
+    assert llm.model_name == "llama-3.3-70b-versatile"
     assert llm.base_url == "https://api.groq.com/openai/v1"
 
 
