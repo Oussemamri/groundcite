@@ -140,12 +140,13 @@ Weeks 0–2 are done and pushed; CI is green on `main`.
 | `tiktoken` | reject | Token usage comes from the provider's `usage` response field. |
 
 **Model names (rule: verify at build time — spec §11 last row).** This file was
-written 2026-07; model catalogs rot. Before pinning config defaults, check the
-providers' current model lists and confirm with the owner which API keys exist
-(`GROQ_API_KEY`? `OPENAI_API_KEY`? local Ollama?). Reasonable starting points to
-verify, not to trust: Groq `llama-3.3-70b-versatile` (answerer default),
-OpenAI `gpt-4o-mini` (alternate answerer), judge = the strongest model the owner
-has access to (spec §11: "judge ≠ answerer" is a hard rule).
+written 2026-07; model catalogs rot. **Answerer provider is settled: Groq only**
+(§1 Phase 0 step 2). Before pinning the `groq_model` config default, check
+Groq's current model list — a reasonable starting point to VERIFY, not trust:
+`llama-3.3-70b-versatile`. Judge metrics are skipped this week (no second
+provider) — do not pin a judge model. `openai_llm.py` / `ollama_llm.py` factories
+still get written per AD-1 (cheap, keeps the port swappable per spec §11) but
+are unexercised — no OpenAI/Ollama model name needs verifying now.
 
 ---
 
@@ -239,11 +240,32 @@ shipping a gate that can't run.
    `domain/results.py`, `adapters/reranker/bge_reranker.py` (the lazy-import +
    mypy-override pattern you will copy), `tests/fakes.py`,
    `tests/integration/conftest.py`.
-2. **OWNER GATE — ask, don't assume:** (a) which LLM API keys exist (Groq /
-   OpenAI / local Ollama), (b) which model to use as judge (must ≠ answerer),
-   (c) golden-set freeze status (worksheet found 0 real problems; freezing is
-   the owner editing `evals/suites/` himself — never you).
-   → **verify:** answers recorded at the top of your working notes/PR body.
+2. **OWNER GATE — SETTLED, do not re-ask:**
+   (a) **LLM API keys: Groq only.** `GROQ_API_KEY` is set in `core/.env`
+       (gitignored — verify it's there, never print or commit its value).
+       `LLM_PROVIDER=groq` is already the config default (`config.py`); no code
+       change needed to select it. OpenAI and local Ollama were both evaluated
+       and explicitly rejected for this project: Ollama on this machine (16GB
+       RAM, RTX 4060 Laptop 4GB VRAM, no local model pulled) hit repeated,
+       unresolved DNS/connection failures against the model registry's R2 CDN
+       backend during setup — abandoned as not worth the friction. Do not
+       suggest Ollama as a fallback; if Groq is ever unreachable, surface the
+       error, do not silently try another provider.
+   (b) **Judge model: SKIP judge metrics this week.** No second LLM provider is
+       available (spec §11 requires judge ≠ answerer, and only Groq is
+       configured). `groundcite eval run` runs WITHOUT `--judge` for all of
+       Week 3 — citation_precision and abstention correctness (hand-rolled,
+       spec §8) still run and are the real signal; faithfulness/context
+       precision (ragas) stay NULL. This is explicitly fine per AD-7: the
+       judge path is optional by design, not a blocker.
+   (c) **Golden-set freeze status:** worksheet (`scripts/verify_golden_set.py`)
+       found 0 real problems (2 flags, both reviewed and confirmed false
+       positives — stemming, not missing content). Freezing (removing
+       `## DRAFT` / `VERIFY:` markers) is the owner's own edit to
+       `evals/suites/` — proceed with the suites AS THEY ARE; do not wait on
+       or ask about a freeze, and never edit those files yourself (rule 13).
+   → **verify:** these three answers are already correct; just confirm
+     `core/.env` has a non-empty `GROQ_API_KEY` before Phase 2, then proceed.
 
 ### Phase 1 — Spec §11 amendment + dependencies + config
 3. Add spec §11 table rows: `openai` SDK (LLM client, all three providers) and
