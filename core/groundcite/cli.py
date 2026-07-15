@@ -330,7 +330,8 @@ def _format_full_eval(r: FullEvalReport, run_id: UUID) -> str:
     for c in wrong:
         want = "abstain" if c.must_abstain else "answer"
         got = c.status.value
-        lines.append(f"  wanted {want:<7} got {got:<10} {c.question[:60]}")
+        ts = f"{c.top_score:.4f}" if c.top_score is not None else "—"
+        lines.append(f"  wanted {want:<7} got {got:<10} top_score={ts:<8} {c.question[:50]}")
     return "\n".join(lines)
 
 
@@ -363,14 +364,15 @@ def _write_full_eval_report(r: FullEvalReport, run_id: UUID, reports_dir: Path) 
         "",
         "## Per-case",
         "",
-        "| # | status | correct? | citation_precision | question |",
-        "|---|---|---|---|---|",
+        "| # | status | correct? | top_score | citation_precision | question |",
+        "|---|---|---|---|---|---|",
     ]
     for i, c in enumerate(r.cases, 1):
         cp = f"{c.citation_precision:.2f}" if c.citation_precision is not None else "—"
+        ts = f"{c.top_score:.4f}" if c.top_score is not None else "—"
         lines.append(
             f"| {i} | {c.status.value} | {'yes' if c.abstention_correct else '**NO**'} | "
-            f"{cp} | {c.question[:70]} |"
+            f"{ts} | {cp} | {c.question[:70]} |"
         )
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return path

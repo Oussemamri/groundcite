@@ -208,6 +208,12 @@ class FullEvalCaseResult(_Frozen):
     this runs the actual answerer through Gates A/B, so it scores what those
     gates DECIDED (citation_precision, abstention_is_correct) rather than what
     was merely retrieved.
+
+    ``top_score`` is the NORMALIZED reranker score Gate A actually compared
+    against τ_retrieval (``Answer.confidence`` when GROUNDED,
+    ``Abstention.confidence`` when ABSTAINED) — recorded so a τ sweep (Phase 6)
+    can be computed from an already-run suite's stored results, never by
+    re-asking every case at each candidate τ.
     """
 
     case_id: UUID
@@ -222,6 +228,7 @@ class FullEvalCaseResult(_Frozen):
     cited_clauses: tuple[str, ...] = ()
     latency_ms: int | None = None
     ask_id: UUID | None = None
+    top_score: float | None = None
 
 
 class FullEvalReport(_Frozen):

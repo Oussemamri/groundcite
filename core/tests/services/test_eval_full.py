@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from uuid import UUID, uuid4
 
+import pytest
+
 from groundcite.domain.entities import Chunk, EvalCase
 from groundcite.domain.results import AbstentionReason, AskStatus
 from groundcite.services.ask import AskService
@@ -95,6 +97,10 @@ def test_grounded_case_with_correct_citation_scores_full_precision() -> None:
     assert report.abstention_accuracy == 1.0  # correctly did NOT abstain
     assert report.cases[0].status is AskStatus.GROUNDED
     assert report.cases[0].abstention_correct is True
+    assert report.cases[0].top_score == pytest.approx(0.9), (
+        "the normalized reranker score Gate A actually compared to tau must be "
+        "recorded so Phase 6's tau sweep needs no re-asking"
+    )
 
     assert repo is not None
     assert repo.eval_runs[run_id].id == run_id
@@ -136,11 +142,16 @@ def test_must_abstain_case_correctly_abstaining_scores_accurate() -> None:
     assert report.cases[0].abstention_correct is True
     assert report.cases[0].citation_precision is None, "nothing was cited"
     assert report.cases[0].abstention_reason is AbstentionReason.WEAK_RETRIEVAL
+    assert report.cases[0].top_score == pytest.approx(0.05), (
+        "an abstained case's score comes from Abstention.confidence, not "
+        "Answer.confidence — must be captured on this branch too"
+    )
 
     assert repo is not None
     row = repo.eval_results[run_id][0]
     assert row.abstained is True
     assert row.citation_precision is None
+    assert row.debug["top_score"] == pytest.approx(0.05), "persisted for the tau sweep (Phase 6)"
 
 
 def test_must_abstain_case_that_answers_anyway_is_scored_wrong() -> None:

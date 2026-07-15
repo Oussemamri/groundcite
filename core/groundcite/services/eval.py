@@ -174,6 +174,7 @@ class EvalService:
             cprec: float | None = None
             latency: int | None = None
             ask_id: UUID | None = None
+            top_score: float | None = None
 
             if terminal is None or terminal.type is AskEventType.ERROR:
                 status = AskStatus.ERROR
@@ -192,10 +193,14 @@ class EvalService:
                         if isinstance(c, dict) and c.get("clause_path")
                     ]
                     cprec = citation_precision(cited, case.expected_clauses)
+                    conf = answer.get("confidence")
+                    top_score = float(conf) if isinstance(conf, int | float) else None
                 else:  # ABSTAINED
                     abstention = terminal.data["abstention"]
                     assert isinstance(abstention, dict)
                     reason = AbstentionReason(abstention["reason"])
+                    conf = abstention.get("confidence")
+                    top_score = float(conf) if isinstance(conf, int | float) else None
 
             grounded = status is AskStatus.GROUNDED
             correct = abstention_is_correct(case.must_abstain, grounded)
@@ -213,6 +218,7 @@ class EvalService:
                     cited_clauses=tuple(cited),
                     latency_ms=latency,
                     ask_id=ask_id,
+                    top_score=top_score,
                 )
             )
             eval_rows.append(
@@ -227,6 +233,7 @@ class EvalService:
                     abstained=(status is AskStatus.ABSTAINED),
                     passed=correct,
                     debug={
+                        "top_score": top_score,
                         "status": status.value,
                         "cited_clauses": cited,
                         "latency_ms": latency,
