@@ -17,6 +17,9 @@ from groundcite.adapters.chunker.clause_chunker import make_clause_chunker
 from groundcite.adapters.embedding.bge_m3_embed import make_bge_m3_embedder, make_zero_embedder
 from groundcite.adapters.evalsuite.jsonl_suite import make_jsonl_suite_loader
 from groundcite.adapters.lexical.pg_lexical import make_pg_lexical_index
+from groundcite.adapters.llm.groq_llm import make_groq_llm
+from groundcite.adapters.llm.ollama_llm import make_ollama_llm
+from groundcite.adapters.llm.openai_llm import make_openai_llm
 from groundcite.adapters.parser.pymupdf_parser import make_pymupdf_parser
 from groundcite.adapters.repository.pg_repo import make_pg_repository
 from groundcite.adapters.reranker.bge_reranker import make_bge_reranker
@@ -27,7 +30,7 @@ from groundcite.adapters.tokencount.bge_m3_tokencount import (
 )
 from groundcite.adapters.vector.pg_vector import make_pg_vector_index
 from groundcite.config import Settings
-from groundcite.ports.protocols import EmbeddingProvider, Reranker, TokenCounter
+from groundcite.ports.protocols import EmbeddingProvider, LLMProvider, Reranker, TokenCounter
 from groundcite.services import (
     AskService,
     EvalService,
@@ -90,6 +93,8 @@ def build_services(settings: Settings) -> Services:
         candidates_lexical=settings.candidates_lexical,
         fused_k=settings.fused_k,
         context_k=settings.context_k,
+        llm=_build_llm(settings),
+        tau_retrieval=settings.tau_retrieval,
     )
 
     return Services(
@@ -111,3 +116,22 @@ def build_services(settings: Settings) -> Services:
         ),
         library=LibraryService(),
     )
+
+
+def _build_llm(settings: Settings) -> LLMProvider:
+    """Select the generation LLM adapter from ``settings.llm_provider`` (AD-1).
+
+    Construction is lazy: only (base_url, api_key, model) is bound here; the
+    OpenAI SDK client opens on first ``stream``, so this works in CI (no
+    ``[llm]`` extra, no reachable provider) without try/except.
+    """
+    if settings.llm_provider == "groq":
+        return make_groq_llm(
+            api_key=settings.groq_api_key,
+            model=settings.groq_model,
+            base_url=settings.groq_base_url,
+        )
+    if settings.llm_provider == "openai":
+        return make_openai_llm(api_key=settings.openai_api_key, model=settings.openai_model)
+    # ollama
+    return make_ollama_llm(base_url=settings.ollama_base_url, model=settings.ollama_model)

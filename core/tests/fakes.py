@@ -6,11 +6,11 @@ runs without the pdf/embed extras or a live Postgres.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Generator, Sequence
 from uuid import UUID
 
 from groundcite.domain.entities import Ask, Chunk, Document, EvalCase, Section
-from groundcite.domain.results import EvalRun
+from groundcite.domain.results import EvalRun, TokenUsage
 from groundcite.ports.protocols import Vector
 
 # A dense embedding vector the chunk store will actually use (1024-d), so fake
@@ -105,6 +105,51 @@ class FakeReranker:
         scored = [(c, self.scores.get(c.clause_path, 0.0)) for c in candidates]
         scored.sort(key=lambda pair: (-pair[1], pair[0].clause_path))
         return scored[:top_k]
+
+
+class FakeLLM:
+    """Scripted token stream + scripted usage (no network, no model).
+
+    Mirrors the real ``LLMProvider`` contract: ``stream`` is a generator that
+    yields token strings and RETURNS the per-call ``TokenUsage`` as its
+    ``StopIteration`` value (AD-1). Used by the ask()/eval unit tests so the
+    service suite runs without the llm extra.
+
+    ``responses`` may be a single string (reused every call — happy path) or a
+    list of strings, one per successive call, so the Phase-4 repair-retry tests
+    can script the first call to FAIL Gate B and the second to pass. Tokens are
+    yielded one CHARACTER at a time to exercise the streaming token loop. When
+    ``responses`` is exhausted on a later call, the last response is reused.
+    """
+
+    def __init__(
+        self,
+        responses: str | Sequence[str] | None = None,
+        usages: TokenUsage | Sequence[TokenUsage] | None = None,
+    ) -> None:
+        if isinstance(responses, str):
+            self._responses: list[str] = [responses]
+        else:
+            self._responses = list(responses or ())
+        if usages is None:
+            default = TokenUsage(prompt_tokens=10, completion_tokens=20)
+            self._usages: list[TokenUsage] = [default]
+        elif isinstance(usages, TokenUsage):
+            self._usages = [usages]
+        else:
+            self._usages = list(usages)
+        self.calls: list[tuple[str, str]] = []
+
+    def stream(self, system: str, user: str) -> Generator[str, None, TokenUsage]:
+        call_idx = len(self.calls)
+        self.calls.append((system, user))
+        if not self._responses:
+            text = ""
+        else:
+            text = self._responses[min(call_idx, len(self._responses) - 1)]
+        usage = self._usages[min(call_idx, len(self._usages) - 1)]
+        yield from text  # text is a str → one char per streamed token (exercises the loop)
+        return usage
 
 
 class FakeRepository:

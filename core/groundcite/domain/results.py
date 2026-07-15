@@ -106,6 +106,19 @@ class Answer(_Frozen):
     confidence: float | None = None
 
 
+class TokenUsage(_Frozen):
+    """Per-call token accounting from the generator (spec §12, AD-1).
+
+    The OpenAI-compatible adapter returns this as the generator's ``StopIteration``
+    value so the streaming token loop and the usage accounting come from ONE call;
+    it feeds ``pipeline_debug`` (prompt/completion token counts) and ``cost_usd``
+    (when the active model has a price entry in config ``model_prices``).
+    """
+
+    prompt_tokens: int
+    completion_tokens: int
+
+
 class Abstention(_Frozen):
     """First-class "cannot answer" result; still useful — carries best passages
     for the UI to render (spec §7 abstention payload). Never called a refusal.

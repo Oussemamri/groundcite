@@ -32,6 +32,7 @@ from groundcite.domain.results import RetrievalResult, RetrievedChunk
 from groundcite.ports.protocols import (
     EmbeddingProvider,
     LexicalIndex,
+    LLMProvider,
     Reranker,
     VectorIndex,
 )
@@ -42,7 +43,15 @@ from groundcite.services.fusion import fuse
 class AskService:
     """Resolve one Ask into a grounded Answer or a first-class Abstention (spec §7).
 
-    Week 2: ``retrieve`` only. Generation and Gates A/B arrive in Week 3.
+    Week 2 implemented the retrieval half (``retrieve``). Week 3 layers
+    ``ask()`` (Gate A → generate → Gate B → stream AskEvents) on top of the
+    SAME ``retrieve`` — no duplication of the retrieval steps.
+
+    ``llm`` and ``tau_retrieval`` are optional here only so the retrieval-only
+    unit tests (Week 2) and the retrieval-only eval path can construct this
+    service without a generator; ``ask()`` (Week 3) requires ``llm`` set and
+    raises at call time if it or the reranker (Gate A gates on its normalized
+    score — AD-3) is missing.
     """
 
     def __init__(
@@ -57,6 +66,8 @@ class AskService:
         candidates_lexical: int = 30,
         fused_k: int = 20,
         context_k: int = 6,
+        llm: LLMProvider | None = None,
+        tau_retrieval: float = 0.35,
     ) -> None:
         self._embedder = embedder
         self._vector = vector_index
@@ -68,6 +79,9 @@ class AskService:
         self._candidates_lexical = candidates_lexical
         self._fused_k = fused_k
         self._context_k = context_k
+        # Generation half (Week 3). None ⇒ ask() raises; retrieve() ignores them.
+        self._llm = llm
+        self._tau_retrieval = tau_retrieval
 
     def retrieve(
         self,

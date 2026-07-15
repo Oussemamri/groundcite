@@ -7,7 +7,7 @@ config. Types only — no bodies, no ``Any`` (spec §17 rule 5).
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Generator, Mapping, Sequence
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 from uuid import UUID
@@ -20,7 +20,7 @@ from groundcite.domain.entities import (
     ParsedDocument,
     Section,
 )
-from groundcite.domain.results import EvalRun
+from groundcite.domain.results import EvalRun, TokenUsage
 
 # A dense embedding vector. Dimension is fixed at 1024 (bge-m3) and locked —
 # changing it means a full re-embed (spec §5, §11, prep task P4).
@@ -45,9 +45,24 @@ class EmbeddingProvider(Protocol):
 
 @runtime_checkable
 class LLMProvider(Protocol):
-    """Streaming text generator for the answerer (spec §7 step 5, §11)."""
+    """Streaming text generator for the answerer (spec §7 step 5, §11).
 
-    def stream(self, system: str, user: str) -> Iterator[str]: ...
+    One OpenAI-compatible client backs all three providers (AD-1). ``stream`` is a
+    generator that yields token strings for live TOKEN events and RETURNS the
+    per-call ``TokenUsage`` (AD-1) as its ``StopIteration`` value, so the streaming
+    consumer and the token/cost accounting share a single provider call:
+
+        gen = llm.stream(system, user)
+        while True:
+            try:
+                token = next(gen)
+            except StopIteration as stop:
+                usage = stop.value
+                break
+            ... emit AskEvent(TOKEN, {"token": token})
+    """
+
+    def stream(self, system: str, user: str) -> Generator[str, None, TokenUsage]: ...
 
 
 @runtime_checkable
