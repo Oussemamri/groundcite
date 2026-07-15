@@ -10,7 +10,7 @@ from collections.abc import Generator, Sequence
 from uuid import UUID
 
 from groundcite.domain.entities import Ask, Chunk, Document, EvalCase, Section
-from groundcite.domain.results import Citation, EvalRun, TokenUsage
+from groundcite.domain.results import Citation, EvalResult, EvalRun, TokenUsage
 from groundcite.ports.protocols import Vector
 
 # A dense embedding vector the chunk store will actually use (1024-d), so fake
@@ -169,7 +169,9 @@ class FakeRepository:
         self.chunks: dict[str, list[Chunk]] = {}
         self.asks: dict[UUID, Ask] = {}
         self.citations: dict[UUID, list[Citation]] = {}
+        self.eval_cases: dict[UUID, EvalCase] = {}
         self.eval_runs: dict[UUID, EvalRun] = {}
+        self.eval_results: dict[UUID, list[EvalResult]] = {}
         self.replace_calls: int = 0
 
     def upsert_document(self, document: Document) -> Document:
@@ -230,5 +232,16 @@ class FakeRepository:
     def load_suite(self, suite: str) -> list[EvalCase]:
         return []
 
-    def save_eval_run(self, run: EvalRun) -> None:
+    def save_eval_run(
+        self, run: EvalRun, cases: Sequence[EvalCase], results: Sequence[EvalResult]
+    ) -> None:
+        for case in cases:
+            self.eval_cases[case.id] = case
         self.eval_runs[run.id] = run
+        self.eval_results[run.id] = list(results)
+
+    def get_eval_run(self, run_id: UUID) -> EvalRun | None:
+        return self.eval_runs.get(run_id)
+
+    def get_eval_results(self, run_id: UUID) -> list[EvalResult]:
+        return list(self.eval_results.get(run_id, ()))

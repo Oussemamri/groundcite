@@ -90,3 +90,37 @@ def first_hit_rank(
 
 def mean(values: Sequence[float]) -> float:
     return sum(values) / len(values) if values else 0.0
+
+
+def citation_precision(
+    cited_clauses: Sequence[str],
+    expected_clauses: Iterable[str],
+) -> float | None:
+    """Fraction of CITED clauses that are actually relevant (spec §8: "cited
+    clauses ⊆ relevant"). Uses the same sub-paragraph matching rule as recall
+    (a citation of §25.1309(b) counts for an expected §25.1309).
+
+    None (not 0.0) when there is nothing to score — an answer with zero
+    citations is a Gate B violation, not a precision of zero; the caller
+    excludes None from any suite-level mean rather than letting it drag the
+    average down for a case that should never reach this function ungated.
+    """
+    cited = list(cited_clauses)
+    if not cited:
+        return None
+    expected = list(expected_clauses)
+    if not expected:
+        return None
+    correct = sum(1 for c in cited if any(matches(c, e) for e in expected))
+    return correct / len(cited)
+
+
+def abstention_is_correct(must_abstain: bool, grounded: bool) -> bool:
+    """Did the pipeline's grounded-vs-abstained DECISION match the case's
+    label (spec §8 abstention correctness)? A pipeline ERROR is never correct
+    — the caller passes ``grounded=False`` for both ABSTAINED and ERROR, so an
+    ERROR only "passes" a must_abstain case by coincidence of the boolean, not
+    because an error is a valid abstention; callers should track ERROR
+    separately in per-case debug detail rather than relying on this alone.
+    """
+    return grounded != must_abstain

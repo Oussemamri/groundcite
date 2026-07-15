@@ -20,7 +20,7 @@ from uuid import UUID
 import psycopg
 
 from groundcite.domain.entities import Ask, Chunk, Document, EvalCase, Section
-from groundcite.domain.results import AskStatus, Citation, EvalRun
+from groundcite.domain.results import AskStatus, Citation, EvalResult, EvalRun
 
 
 class PgRepository:
@@ -212,7 +212,7 @@ class PgRepository:
             confidence=row[4],
             latency_ms=row[5],
             cost_usd=row[6],
-            pipeline_debug=json.loads(row[7]) if row[7] else {},
+            pipeline_debug=row[7] or {},  # psycopg3 auto-deserializes jsonb to dict
             created_at=row[8],
         )
 
@@ -239,13 +239,104 @@ class PgRepository:
             for r in rows
         ]
 
-    def save_eval_run(self, run: EvalRun) -> None:
-        with self._connect() as conn:
+    def save_eval_run(
+        self, run: EvalRun, cases: Sequence[EvalCase], results: Sequence[EvalResult]
+    ) -> None:
+        # One transaction (AD-6): upsert the Cases (they live in JSONL, rule 13 —
+        # not the DB — so eval_results.case_id's FK has nothing to point at until
+        # this runs), then the run row, then all its per-Case result rows.
+        # started_at/finished_at both stamp `now()` — runs are synchronous
+        # (spec §8 Phase 5: "per case run ask(), non-streamed collection"), so
+        # there is no separate start-then-finish phase to track a real duration.
+        with self._connect() as conn, conn.transaction():
+            if cases:
+                with conn.cursor() as cur:
+                    cur.executemany(
+                        """INSERT INTO eval_cases
+                             (id, suite, question, expected_clauses, expected_facts,
+                              must_abstain, language)
+                           VALUES (%s,%s,%s,%s,%s,%s,%s)
+                           ON CONFLICT (id) DO UPDATE SET
+                             question          = EXCLUDED.question,
+                             expected_clauses  = EXCLUDED.expected_clauses,
+                             expected_facts    = EXCLUDED.expected_facts,
+                             must_abstain      = EXCLUDED.must_abstain,
+                             language          = EXCLUDED.language""",
+                        [
+                            (
+                                c.id,
+                                c.suite,
+                                c.question,
+                                list(c.expected_clauses),
+                                list(c.expected_facts),
+                                c.must_abstain,
+                                c.language,
+                            )
+                            for c in cases
+                        ],
+                    )
             conn.execute(
-                """INSERT INTO eval_runs (id, git_sha, config, started_at)
-                   VALUES (%s,%s,%s, now())""",
+                """INSERT INTO eval_runs (id, git_sha, config, started_at, finished_at)
+                   VALUES (%s,%s,%s, now(), now())""",
                 (run.id, run.git_sha, json.dumps(run.config)),
             )
+            if results:
+                with conn.cursor() as cur:
+                    cur.executemany(
+                        """INSERT INTO eval_results
+                             (run_id, case_id, recall_at_5, recall_at_10, mrr,
+                              citation_precision, faithfulness, abstained, passed, debug)
+                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                        [
+                            (
+                                r.run_id,
+                                r.case_id,
+                                r.recall_at_5,
+                                r.recall_at_10,
+                                r.mrr,
+                                r.citation_precision,
+                                r.faithfulness,
+                                r.abstained,
+                                r.passed,
+                                json.dumps(r.debug),
+                            )
+                            for r in results
+                        ],
+                    )
+
+    def get_eval_run(self, run_id: UUID) -> EvalRun | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT id, git_sha, config FROM eval_runs WHERE id = %s",
+                (run_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return EvalRun(id=row[0], git_sha=row[1], config=row[2] or {})
+
+    def get_eval_results(self, run_id: UUID) -> list[EvalResult]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """SELECT run_id, case_id, recall_at_5, recall_at_10, mrr,
+                          citation_precision, faithfulness, abstained, passed, debug
+                   FROM eval_results WHERE run_id = %s""",
+                (run_id,),
+            ).fetchall()
+        return [
+            EvalResult(
+                run_id=r[0],
+                case_id=r[1],
+                recall_at_5=r[2],
+                recall_at_10=r[3],
+                mrr=r[4],
+                citation_precision=r[5],
+                faithfulness=r[6],
+                abstained=r[7],
+                passed=r[8],
+                debug=r[9] or {},
+            )
+            for r in rows
+        ]
 
 
 # --- row mappers ---------------------------------------------------------
@@ -288,7 +379,7 @@ def _chunk_from_row(row) -> Chunk:
         token_count=row[5],
         page_start=row[6],
         page_end=row[7],
-        metadata=json.loads(row[8]) if row[8] else {},
+        metadata=row[8] or {},  # psycopg3 auto-deserializes jsonb to dict
     )
 
 

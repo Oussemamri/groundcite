@@ -5,6 +5,8 @@ from __future__ import annotations
 import pytest
 
 from groundcite.services.metrics import (
+    abstention_is_correct,
+    citation_precision,
     first_hit_rank,
     matches,
     mean,
@@ -72,3 +74,46 @@ def test_no_expected_clauses_is_unscorable_not_a_zero() -> None:
 def test_mean_of_empty_is_zero() -> None:
     assert mean([]) == 0.0
     assert mean([1.0, 0.0]) == pytest.approx(0.5)
+
+
+# --- citation_precision (spec §8: "cited clauses ⊆ relevant") -----------------
+
+
+def test_citation_precision_all_correct_is_one() -> None:
+    cited = [f"{CP}25.1309(b)", f"{CP}25.1309(b)(2)"]
+    assert citation_precision(cited, ["25.1309"]) == 1.0
+
+
+def test_citation_precision_is_fractional_when_some_citations_are_off_target() -> None:
+    cited = [f"{CP}25.1309(b)", f"{CP}25.999"]
+    assert citation_precision(cited, ["25.1309"]) == pytest.approx(0.5)
+
+
+def test_citation_precision_zero_when_nothing_cited_is_relevant() -> None:
+    cited = [f"{CP}25.888", f"{CP}25.999"]
+    assert citation_precision(cited, ["25.1309"]) == 0.0
+
+
+def test_citation_precision_is_none_not_zero_when_uncitable() -> None:
+    """No citations, or no expected clauses to score against, is UNDEFINED —
+    never a fabricated 0.0 (a Gate-B-violating empty-citation answer should
+    never even reach this function; a should-abstain case has no clauses to
+    score against)."""
+    assert citation_precision([], ["25.1309"]) is None
+    assert citation_precision([f"{CP}25.1309"], []) is None
+
+
+# --- abstention_is_correct (spec §8 abstention correctness) --------------------
+
+
+@pytest.mark.parametrize(
+    ("must_abstain", "grounded", "correct"),
+    [
+        (True, False, True),  # should abstain, did abstain (or errored) -> correct
+        (True, True, False),  # should abstain, answered anyway -> WRONG (hallucination risk)
+        (False, True, True),  # should answer, did answer -> correct
+        (False, False, False),  # should answer, abstained (or errored) -> wrong (over-cautious)
+    ],
+)
+def test_abstention_is_correct_matrix(must_abstain: bool, grounded: bool, correct: bool) -> None:
+    assert abstention_is_correct(must_abstain, grounded) is correct

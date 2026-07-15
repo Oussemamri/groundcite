@@ -201,6 +201,54 @@ class RetrievalEvalReport(_Frozen):
     config: dict[str, object] = Field(default_factory=dict)
 
 
+class FullEvalCaseResult(_Frozen):
+    """Per-Case result of a FULL-pipeline eval run (spec §8; Phase 5).
+
+    Distinct from ``RetrievalCaseResult`` (spec §15.1, recall@k/MRR, no LLM):
+    this runs the actual answerer through Gates A/B, so it scores what those
+    gates DECIDED (citation_precision, abstention_is_correct) rather than what
+    was merely retrieved.
+    """
+
+    case_id: UUID
+    question: str
+    language: str
+    must_abstain: bool
+    status: AskStatus
+    abstention_reason: AbstentionReason | None = None
+    abstention_correct: bool
+    citation_precision: float | None = None
+    faithfulness: float | None = None
+    cited_clauses: tuple[str, ...] = ()
+    latency_ms: int | None = None
+    ask_id: UUID | None = None
+
+
+class FullEvalReport(_Frozen):
+    """Suite-level full-pipeline baseline (spec §8; Phase 5/6).
+
+    ``mean_citation_precision`` is taken over GROUNDED cases that actually
+    carry citations (Gate B guarantees >=1, so this excludes only the
+    pathological/error cases, never silently drops a real answer).
+    ``abstention_accuracy`` is taken over ALL cases (spec §8: "abstention
+    correctness for negative cases" generalizes to every case having a
+    correct/incorrect grounded-vs-abstained label).
+    """
+
+    suite: str
+    git_sha: str
+    judge: bool
+    total_cases: int
+    grounded_cases: int
+    abstained_cases: int
+    error_cases: int
+    abstention_accuracy: float
+    mean_citation_precision: float
+    mean_faithfulness: float | None = None
+    cases: tuple[FullEvalCaseResult, ...] = ()
+    config: dict[str, object] = Field(default_factory=dict)
+
+
 class IngestionReport(_Frozen):
     """Result of one IngestionService.ingest run (spec §6 step 5).
 

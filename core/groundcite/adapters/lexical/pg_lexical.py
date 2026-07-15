@@ -25,7 +25,6 @@ can construct this adapter with no live DB (CI).
 
 from __future__ import annotations
 
-import json
 from collections.abc import Sequence
 from typing import Any
 
@@ -117,7 +116,7 @@ def _chunk_from_row(row: Sequence[Any]) -> Chunk:
         token_count=row[5],
         page_start=row[6],
         page_end=row[7],
-        metadata=json.loads(row[8]) if row[8] else {},
+        metadata=row[8] or {},  # psycopg3 auto-deserializes jsonb to dict
     )
 
 

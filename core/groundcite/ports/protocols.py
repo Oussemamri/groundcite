@@ -20,7 +20,7 @@ from groundcite.domain.entities import (
     ParsedDocument,
     Section,
 )
-from groundcite.domain.results import Citation, EvalRun, TokenUsage
+from groundcite.domain.results import Citation, EvalResult, EvalRun, TokenUsage
 
 # A dense embedding vector. Dimension is fixed at 1024 (bge-m3) and locked —
 # changing it means a full re-embed (spec §5, §11, prep task P4).
@@ -196,4 +196,18 @@ class Repository(Protocol):
     # --- evals ---
     def load_suite(self, suite: str) -> list[EvalCase]: ...
 
-    def save_eval_run(self, run: EvalRun) -> None: ...
+    def save_eval_run(
+        self, run: EvalRun, cases: Sequence[EvalCase], results: Sequence[EvalResult]
+    ) -> None:
+        """Persist one eval Run + its per-Case results in one transaction (AD-6,
+        Phase 5). ``cases`` are UPSERTED into ``eval_cases`` first — the suite is
+        loaded from JSONL (rule 13), not the DB, so a Case's row may not exist yet;
+        their ids are deterministic (uuid5 of suite+question), so this is
+        idempotent across repeated runs of the same suite. ``results`` may be
+        empty only for a run that produced no scorable cases."""
+
+    def get_eval_run(self, run_id: UUID) -> EvalRun | None: ...
+
+    def get_eval_results(self, run_id: UUID) -> list[EvalResult]:
+        """Per-Case results for a past Run, in Case order (``groundcite eval
+        report <run-id>``, Phase 5)."""

@@ -111,12 +111,15 @@ def build_services(settings: Settings) -> Services:
             repository=repository,
         ),
         ask=ask,
-        # EvalService scores AskService.retrieve directly — no LLM, no judge
-        # (spec §8 retrieval-only metrics, §15.1). Suite loading is injected as
-        # a callable, the same seam as the Chunker's count_tokens (§6.1 #4).
+        # run_retrieval (§15.1) scores AskService.retrieve directly — no LLM.
+        # run_full (Phase 5) drives the SAME ask, through Gates A/B, for
+        # citation_precision + abstention correctness (spec §8). Suite loading
+        # is injected as a callable, the same seam as Chunker's count_tokens
+        # (§6.1 #4); repository is optional (AD-6 persistence, skipped if None).
         evals=EvalService(
             ask=ask,
             load_suite=make_jsonl_suite_loader(settings.eval_suites_dir),
+            repository=repository,
         ),
         library=LibraryService(),
     )
