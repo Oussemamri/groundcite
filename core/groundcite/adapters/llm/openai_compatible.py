@@ -29,15 +29,21 @@ from typing import Any
 
 from groundcite.domain.results import TokenUsage
 
-# Declared ``Any`` so the guarded ``None`` assignment type-checks in BOTH install
-# states: CI (openai missing → ``ignore_missing_imports`` makes it Any) and the
-# local dev install (openai ships real ``py.typed`` stubs, so the import binds a
-# real ``type[OpenAI]``). Without this annotation mypy narrows the name from the
-# try-branch to ``type[OpenAI]`` and the except's ``None`` then fails. Mirrors
-# the bge_reranker lazy-import + per-module mypy-override pattern.
-_OpenAI: Any
+# A single annotated assignment inside the try block (not a bare pre-declaration
+# followed by a rebind under the SAME name) so mypy type-checks cleanly in BOTH
+# install states: CI (openai missing -> the inline `# type: ignore[import]`
+# suppresses the error; this file's ignore_missing_imports override alone did
+# NOT suppress it — the exact `[import]` code, matching bge_reranker.py /
+# bge_m3_embed.py, is required) and local dev (openai installed for real ->
+# `_OpenAIClass` is `type[OpenAI]`, still assignable to an `Any`-typed target).
+# A bare `_OpenAI: Any` declared BEFORE `from openai import OpenAI as _OpenAI`
+# triggers a spurious no-redef error when openai is missing — two bindings for
+# one name. A bare `import openai` (module form) is NOT covered by the same
+# ignore, so the import must use the `from X import Y` form.
 try:  # pragma: no cover - exercised only when the llm extra is installed
-    from openai import OpenAI as _OpenAI
+    from openai import OpenAI as _OpenAIClass  # type: ignore[import]
+
+    _OpenAI: Any = _OpenAIClass
 except ImportError:  # pragma: no cover
     _OpenAI = None
 
