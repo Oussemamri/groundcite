@@ -83,7 +83,13 @@ class AskService:
         fused_k: int = 20,
         context_k: int = 6,
         llm: LLMProvider | None = None,
-        tau_retrieval: float = 0.35,
+        # Matches config.Settings.tau_retrieval's default — kept in sync
+        # deliberately (rule 9 spirit): container.py always passes the config
+        # value explicitly, but this fallback exists for direct/test
+        # construction, and it must never silently regress to the tau=0.35
+        # value Week 3 Phase 6 measured leaking 25% of must-abstain cases
+        # (docs/WEEK3_RESULTS.md, spec §7.1).
+        tau_retrieval: float = 0.70,
         repository: Repository | None = None,
         model_prices: Mapping[str, tuple[float, float]] | None = None,
     ) -> None:

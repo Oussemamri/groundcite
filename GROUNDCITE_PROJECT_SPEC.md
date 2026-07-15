@@ -319,6 +319,19 @@ question
 
 Defaults to start (tune with evals, store in config not code): `τ_retrieval = 0.35` (reranker score) or RRF `≥ 0.05` when reranker off; candidates 30/30 → fused 20 → context 6.
 
+**§7.1 Amendment (Week 3 Phase 6, tuned with real evals as this section itself
+instructs):** the "RRF ≥ 0.05 when reranker off" fallback is DEAD — Week 2
+measured that with `rrf_k=60` and two candidate lists, the RRF ceiling is
+`2/61 ≈ 0.033`, below 0.05 itself, and grounded/must-abstain RRF distributions
+overlap completely (Gate A cannot separate them on RRF alone). **Gate A
+therefore REQUIRES the reranker**; `ask()` raises a config error if
+`RERANKER_ENABLED=false`. `τ_retrieval` is raised from `0.35` to `0.70`: a real
+60-case full-pipeline baseline (`docs/WEEK3_RESULTS.md`) swept τ against every
+case's recorded top_score and found 0.35 leaks 3/12 (25%) must-abstain cases
+through Gate A on raw score alone; 0.70 is the first τ with zero measured leak.
+Cost: grounded-wrongly-abstained rises 4.2% → 10.4% (5/48) — spec §1's "wrong
+citation is worse than no answer" contract justifies the trade.
+
 ---
 
 ## 8. Evals (`EvalService`) — the differentiator, build BEFORE the UI
@@ -383,7 +396,7 @@ Rules: routes are thin (parse → service → serialize); pydantic response mode
 **Build (ours, always):** clause-tree construction, clause-aware chunking + breadcrumbs, hybrid fusion (RRF) + clause fast-path, abstention gates A/B, retrieval metrics, the eval runner/report/CI gate, all prompts.
 **Never introduce:** LangChain, LlamaIndex, Haystack, or any RAG orchestration framework. The pipeline in §7 is the portfolio piece; frameworks hollow it out. Reference their source if useful — never depend on it.
 
-Config via `.env` (see `.env.example`): `DATABASE_URL`, `EMBEDDING_PROVIDER=bge_m3|openai`, `LLM_PROVIDER=groq|openai|ollama`, `RERANKER_ENABLED=true`, `TAU_RETRIEVAL=0.35`, `MIN_LEAF_TOKENS=64`, provider keys.
+Config via `.env` (see `.env.example`): `DATABASE_URL`, `EMBEDDING_PROVIDER=bge_m3|openai`, `LLM_PROVIDER=groq|openai|ollama`, `RERANKER_ENABLED=true`, `TAU_RETRIEVAL=0.70` (§7.1 amendment), `MIN_LEAF_TOKENS=64`, provider keys.
 
 ## 12. Observability (interviewers probe this)
 

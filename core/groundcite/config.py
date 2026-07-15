@@ -94,7 +94,15 @@ class Settings(BaseSettings):
     model_prices: dict[str, ModelPrice] = Field(default_factory=dict)
 
     # --- retrieval tunables (defaults from spec §7; tune with evals) ---
-    tau_retrieval: float = 0.35
+    # 0.70, not the spec's original 0.35 (AD-3 / Week 3 Phase 6, real baseline
+    # on the full 60-case golden set, tau_sweep against every case's recorded
+    # top_score): tau=0.35 leaks 3/12 (25%) must-abstain cases through Gate A
+    # on raw score alone — spec §1's "wrong citation is worse than no answer"
+    # contract cannot depend on the LLM's own insufficient-flag as the only
+    # backstop. 0.70 is the first candidate with zero measured leak on that
+    # baseline; cost is grounded-wrongly-abstained rising 4.2% -> 10.4%
+    # (5/48), a real, stated trade — see docs/WEEK3_RESULTS.md.
+    tau_retrieval: float = 0.70
     rrf_k: int = 60
     candidates_dense: int = 30
     candidates_lexical: int = 30
