@@ -229,6 +229,10 @@ class FullEvalCaseResult(_Frozen):
     latency_ms: int | None = None
     ask_id: UUID | None = None
     top_score: float | None = None
+    # The ERROR event's data["message"] (AD-2's terminal-event contract) — never
+    # dropped. Without this an "error" row in the report is a dead end: no DB
+    # query and no re-run can recover WHY it failed after the fact.
+    error_message: str | None = None
 
 
 class FullEvalReport(_Frozen):

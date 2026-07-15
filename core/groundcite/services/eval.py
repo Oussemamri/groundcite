@@ -175,9 +175,14 @@ class EvalService:
             latency: int | None = None
             ask_id: UUID | None = None
             top_score: float | None = None
+            error_message: str | None = None
 
             if terminal is None or terminal.type is AskEventType.ERROR:
                 status = AskStatus.ERROR
+                if terminal is None:
+                    error_message = "no terminal event (stream ended without FINAL or ERROR)"
+                else:
+                    error_message = str(terminal.data.get("message", ""))
             else:
                 status = AskStatus(str(terminal.data["status"]))
                 latency_raw = terminal.data.get("latency_ms")
@@ -219,6 +224,7 @@ class EvalService:
                     latency_ms=latency,
                     ask_id=ask_id,
                     top_score=top_score,
+                    error_message=error_message,
                 )
             )
             eval_rows.append(
@@ -238,6 +244,7 @@ class EvalService:
                         "cited_clauses": cited,
                         "latency_ms": latency,
                         "ask_id": str(ask_id) if ask_id else None,
+                        "error_message": error_message,
                     },
                 )
             )

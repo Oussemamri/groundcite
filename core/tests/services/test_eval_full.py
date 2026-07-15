@@ -249,6 +249,43 @@ def test_persistence_is_skipped_when_no_repository_wired() -> None:
     assert run_id is not None
 
 
+def test_error_case_captures_the_actual_exception_message() -> None:
+    """An ERROR terminal event's data["message"] must survive into the report
+    and the persisted debug JSON — silently dropping it turns every error row
+    into a dead end that only live reproduction against a real provider can
+    diagnose (found the hard way: Groq 429s during Phase 6 all read as bare
+    "error" rows with no way to tell a rate limit from a real bug)."""
+
+    class _ExplodingLLM:
+        model_name = "boom"
+
+        def stream(self, system: str, user: str):  # type: ignore[no-untyped-def]
+            raise ValueError("simulated provider failure")
+            yield  # pragma: no cover - makes this a generator function
+
+    c = _chunk("25.1309(b)")
+    case = _case("q?", expected=("25.1309",))
+    repo = FakeRepository()
+    ask = AskService(
+        embedder=FakeEmbedder(),
+        vector_index=FakeVectorIndex([(c, 0.9)]),
+        lexical_index=FakeLexicalIndex(),
+        reranker=FakeReranker({c.clause_path: 0.9}),
+        llm=_ExplodingLLM(),  # type: ignore[arg-type]
+        tau_retrieval=0.35,
+        repository=repo,
+    )
+    evals = EvalService(ask=ask, load_suite=lambda _s: [case], repository=repo)
+    report, run_id = evals.run_full("core")
+
+    assert report.error_cases == 1
+    assert report.cases[0].status is AskStatus.ERROR
+    assert report.cases[0].error_message == "simulated provider failure"
+
+    row = repo.eval_results[run_id][0]
+    assert row.debug["error_message"] == "simulated provider failure"
+
+
 def test_run_id_is_stable_across_the_run_and_config_is_snapshotted() -> None:
     c = _chunk("25.1")
     case = _case("q?", expected=("25.1",))
