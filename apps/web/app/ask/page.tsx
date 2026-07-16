@@ -1,16 +1,26 @@
 "use client";
 
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { AbstentionCard } from "@/app/components/AbstentionCard";
 import { CitationCard } from "@/app/components/CitationCard";
 import { PipelineStatus } from "@/app/components/PipelineStatus";
 import { StatusChip } from "@/app/components/StatusChip";
+import { api } from "@/lib/api";
 import { renderAnswerMd } from "@/lib/markdown";
 import { useAskStream } from "@/lib/sse";
 
 export default function AskPage() {
   const [question, setQuestion] = useState("");
   const stream = useAskStream();
+
+  // CitationOut carries no document identifier (spec §7 contract) -- with a
+  // single-document library this is unambiguous, so a citation click can
+  // still open the reader at the right chunk. Once the library holds more
+  // than one document, this needs a real `document_slug` on Citation to stay
+  // correct instead of guessing; noted as a residual, not built speculatively.
+  const { data: documents } = useQuery({ queryKey: ["documents"], queryFn: api.listDocuments });
+  const documentSlug = documents?.length === 1 ? documents[0]?.slug : undefined;
 
   const isStreaming = stream.status === "streaming";
   const isTerminal = stream.status === "grounded" || stream.status === "abstained";
@@ -120,6 +130,7 @@ export default function AskPage() {
                 chunkId={p.chunk_id}
                 score={p.score}
                 snippet={p.content}
+                documentSlug={documentSlug}
               />
             ))}
           </div>
