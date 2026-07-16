@@ -1,0 +1,41 @@
+{
+  "git_sha": "19de5cd",
+  "recorded_at": "2026-07-16",
+  "corpus": "far-25",
+  "config": {
+    "tau_retrieval": 0.7,
+    "reranker_enabled": true,
+    "reranker_model": "BAAI/bge-reranker-v2-m3",
+    "embedding_model": "BAAI/bge-m3",
+    "rrf_k": 60,
+    "candidates_dense": 30,
+    "candidates_lexical": 30,
+    "fused_k": 20,
+    "context_k": 6,
+    "llm_provider": "groq",
+    "groq_model": "openai/gpt-oss-120b"
+  },
+  "suites": {
+    "core": {
+      "recall_at_5": 0.863,
+      "recall_at_10": 0.902,
+      "mrr": 0.850,
+      "abstention_accuracy": 0.900,
+      "mean_citation_precision": 0.885
+    },
+    "german": {
+      "recall_at_5": 0.917,
+      "recall_at_10": 0.958,
+      "mrr": 0.938,
+      "abstention_accuracy": 0.800,
+      "mean_citation_precision": 1.000
+    },
+    "negative": {
+      "recall_at_5": 0.0,
+      "recall_at_10": 0.0,
+      "mrr": 0.0,
+      "abstention_accuracy": 1.000,
+      "mean_citation_precision": null
+    }
+  }
+}
