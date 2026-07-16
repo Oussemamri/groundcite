@@ -33,7 +33,17 @@ class Settings(BaseSettings):
     """Environment-backed configuration (spec §11)."""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        # Absolute path (not cwd-relative ".env"): pydantic-settings otherwise
+        # resolves relative to the process's CWD, which broke apps/api (run
+        # from apps/api/, so a bare ".env" silently found nothing, and every
+        # setting quietly fell back to its class default -- caught live: a
+        # real ask failed with "The api_key client option must be set", not a
+        # clean config error, because GROQ_API_KEY was simply never loaded).
+        # core/.env stays the one real secrets file (never moved/duplicated);
+        # every process (CLI from core/, apps/api from apps/api/, apps/web's
+        # future server-side reads) now resolves the SAME file regardless of
+        # its own CWD, matching this module's own "single source" docstring.
+        env_file=_REPO_ROOT / "core" / ".env",
         env_file_encoding="utf-8",
         extra="ignore",
         case_sensitive=False,

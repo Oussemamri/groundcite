@@ -22,6 +22,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.errors import install_exception_handlers
 from app.logging_conf import configure_logging, get_logger
 from app.routes.asks import router as asks_router
+from app.routes.asks_stream import router as asks_stream_router
 from app.routes.documents import router as documents_router
 from app.routes.evals import router as evals_router
 from app.routes.health import router as health_router
@@ -69,8 +70,9 @@ def create_app() -> FastAPI:
     app.include_router(health_router)
     app.include_router(documents_router)
     app.include_router(asks_router)
+    app.include_router(asks_stream_router)
     app.include_router(evals_router)
-    # POST /asks (SSE ask stream) and the write routes (jobs) land in Phase 3/4.
+    # The write routes (documents upload, eval trigger, jobs) land in Phase 4.
     return app
 
 

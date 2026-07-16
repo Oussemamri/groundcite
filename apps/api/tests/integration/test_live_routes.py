@@ -4,7 +4,11 @@ built by the lifespan (build_services) — this is the one thing stubs cannot
 cover: the route → service → repository → live-DB round trip. These auto-skip
 when the DB is unreachable, so `pytest` in CI (api job: no DB) stays green.
 
-The full live SSE ask is a MANUAL smoke (spends Groq tokens) — never in pytest.
+A live GROUNDED ask (spends Groq tokens, needs the full model stack loaded)
+is a MANUAL smoke — never in pytest. A live must-abstain ask costs nothing
+(Gate A blocks before the LLM call, confirmed empirically: prompt_tokens=0)
+and exercises the same real embed+rerank+DB+SSE wiring, so ONE such case is
+worth having here.
 """
 
 from __future__ import annotations
@@ -106,3 +110,23 @@ def test_live_eval_runs_list(live_client: TestClient) -> None:
     assert r.status_code == 200
     # May have 0+ runs depending on corpus state; contract is just no error.
     assert isinstance(r.json(), list)
+
+
+def test_live_sse_ask_must_abstain_costs_no_tokens(live_client: TestClient) -> None:
+    # Out-of-corpus question -> Gate A abstains on the reranker score alone,
+    # before any LLM call (prompt_tokens/completion_tokens both 0) -- real
+    # embed + rerank + Postgres + SSE wiring, zero Groq spend.
+    r = live_client.post(
+        "/api/v1/asks",
+        json={
+            "question": "What does DO-178C say about MC/DC coverage requirements?",
+            "document_slugs": ["far-25"],
+        },
+    )
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("text/event-stream")
+    events = [ln for ln in r.text.split("\r\n") if ln.startswith("event:")]
+    assert events[0] == "event: stage"
+    assert events[-1] == "event: final"
+    assert '"status": "abstained"' in r.text
+    assert '"usage": {"prompt_tokens": 0, "completion_tokens": 0}' in r.text

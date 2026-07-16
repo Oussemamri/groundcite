@@ -15,7 +15,9 @@ from typing import Protocol
 from uuid import UUID
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sse_starlette.sse import AppStatus
 
 from app import main as app_main
 from app.deps import get_app_settings, get_services
@@ -35,6 +37,9 @@ class _LibraryProto(Protocol):
 class _AskProto(Protocol):
     def get_ask(self, ask_id: UUID) -> object | None: ...
     def get_ask_citations(self, ask_id: UUID) -> list[object]: ...
+    def ask(
+        self, question: str, document_slugs: Sequence[str] | None = None
+    ) -> Iterator[object]: ...
 
 
 class _EvalsProto(Protocol):
@@ -73,12 +78,20 @@ class StubLibrary:
 class StubAsk:
     asks: dict[UUID, object] = field(default_factory=dict)
     citations: dict[UUID, list[object]] = field(default_factory=dict)
+    # Scripted event stream for POST /asks (AD-2); a callable so each request
+    # can get a FRESH iterator (a plain list would be exhausted after test 1).
+    events_factory: Callable[[], Iterator[object]] | None = None
 
     def get_ask(self, ask_id: UUID) -> object | None:
         return self.asks.get(ask_id)
 
     def get_ask_citations(self, ask_id: UUID) -> list[object]:
         return self.citations.get(ask_id, [])
+
+    def ask(self, question: str, document_slugs: Sequence[str] | None = None) -> Iterator[object]:
+        if self.events_factory is None:
+            return iter(())
+        return self.events_factory()
 
 
 @dataclass
@@ -112,6 +125,18 @@ class StubSettings:
 # --- fixtures ----------------------------------------------------------------
 
 
+@pytest.fixture(autouse=True)
+def _reset_sse_starlette_app_status() -> None:
+    """sse-starlette caches a process-global exit event on first use, bound to
+    whichever event loop was active THEN (``AppStatus.should_exit_event`` in
+    ``sse_starlette/sse.py``). Each pytest test spins up its own TestClient on
+    its own event loop, so without this reset the SECOND test to hit an SSE
+    route fails with "Event object is bound to a different event loop" --
+    real, reproduced while writing test_asks_stream.py. Not a bug in our
+    route; sse-starlette's own test suite resets this the same way."""
+    AppStatus.should_exit_event = None
+
+
 @pytest.fixture
 def stub_services() -> StubServices:
     return StubServices()
@@ -121,7 +146,7 @@ def stub_services() -> StubServices:
 def make_client() -> Iterator[Callable[[StubServices | None], TestClient]]:
     """Factory building a TestClient wired to a (default or custom) stub. The
     default stub is empty; tests populate it. Overrides are cleaned up after."""
-    created: list[TestClient] = []
+    created: list[FastAPI] = []
 
     def _make(services: StubServices | None = None) -> TestClient:
         svc = services if services is not None else StubServices()
@@ -129,19 +154,18 @@ def make_client() -> Iterator[Callable[[StubServices | None], TestClient]]:
         app.dependency_overrides[get_services] = lambda: svc
         app.dependency_overrides[get_app_settings] = lambda: StubSettings()
         app.state.services = svc
-        c = TestClient(app)
-        created.append(c)
-        return c
+        created.append(app)
+        return TestClient(app)
 
     yield _make
-    for c in created:
-        c.app.dependency_overrides.clear()
+    for app in created:
+        app.dependency_overrides.clear()
 
 
 @pytest.fixture
-def client(make_client) -> TestClient:
+def client(make_client: Callable[[StubServices | None], TestClient]) -> TestClient:
     """A client on the default (empty) stub."""
-    return make_client()
+    return make_client(None)
 
 
 __all__ = [
