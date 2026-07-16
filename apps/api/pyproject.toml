@@ -7,15 +7,17 @@ requires-python = ">=3.13"
 # SSE plumbing is Buy (sse-starlette, spec §11.1 / CLAUDE.md allow-list);
 # structlog named in spec §12; python-multipart is FastAPI's multipart upload
 # dependency (spec §9 POST /documents). All API-layer only — core stays logfree.
-# groundcite[embed,rerank,llm]: a live ask needs the real embedder (Gate A/
-# retrieval), reranker (Gate A), and LLM client (generation) -- the bare
-# `groundcite` dependency alone only gets the stub-testable service layer;
-# every route works under pytest's stubs either way, but a real uvicorn
-# instance crashes on the first live ask without these (found live: "GET
-# /healthz" was fine, "POST /asks" errored "FlagEmbedding is not installed").
-# `pdf` is NOT pulled in: ingestion isn't wired into any route until Phase 4.
+# groundcite[embed,rerank,llm,pdf]: a live ask needs the real embedder
+# (Gate A/retrieval), reranker (Gate A), and LLM client (generation); POST
+# /documents needs the pdf extra for real parsing -- the bare `groundcite`
+# dependency alone only gets the stub-testable service layer; every route
+# works under pytest's stubs either way, but a real uvicorn instance
+# crashes on first use without these (found live, twice: "POST /asks"
+# errored "FlagEmbedding is not installed" in Phase 3; "POST /documents"
+# errored "PyMuPDF (fitz) is not installed" in Phase 4 -- both fixed here
+# rather than papered over, same pattern each time).
 dependencies = [
-    "groundcite[embed,rerank,llm]",
+    "groundcite[embed,rerank,llm,pdf]",
     "fastapi==0.139.1",
     "uvicorn[standard]==0.51.0",
     "sse-starlette==2.4.0",
@@ -61,7 +63,13 @@ known-first-party = ["app", "groundcite"]
 
 # FastAPI decorators hide function signatures from ruff's B008 heuristic.
 [tool.ruff.lint.flake8-bugbear]
-extend-immutable-calls = ["fastapi.Depends", "fastapi.Body", "fastapi.Query"]
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Body",
+    "fastapi.Query",
+    "fastapi.File",
+    "fastapi.Form",
+]
 
 # ----------------------------------------------------------------------------
 # mypy — strict where practical (FastAPI/pydantic make full strict cheap here).

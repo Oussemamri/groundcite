@@ -15,6 +15,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
+from app.jobs import Job
 from groundcite.domain.entities import Ask, Chunk, Document, Section
 from groundcite.domain.results import Citation, EvalResult, EvalRun
 
@@ -184,3 +185,27 @@ class EvalResultOut(_Out):
 class EvalRunDetailOut(_Out):
     run: EvalRunOut
     results: list[EvalResultOut]
+
+
+class JobOut(_Out):
+    """A background write's status (spec §9; AD-5). ``result``'s shape depends
+    on ``kind`` -- an ingest job's is an ingestion report summary, an
+    eval_run job's is ``{"run_id": ...}``."""
+
+    id: UUID
+    kind: str
+    status: str
+    detail: str | None = None
+    result: dict[str, object] | None = None
+    created_at: datetime
+
+    @classmethod
+    def from_job(cls, job: Job) -> JobOut:
+        return cls(
+            id=job.id,
+            kind=job.kind.value,
+            status=job.status.value,
+            detail=job.detail,
+            result=job.result,
+            created_at=job.created_at,
+        )

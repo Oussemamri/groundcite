@@ -21,6 +21,7 @@ from sse_starlette.sse import AppStatus
 
 from app import main as app_main
 from app.deps import get_app_settings, get_services
+from app.jobs import JobRegistry
 from app.main import create_app
 
 # --- stubs at the Services seam ----------------------------------------------
@@ -45,6 +46,25 @@ class _AskProto(Protocol):
 class _EvalsProto(Protocol):
     def list_runs(self) -> list[object]: ...
     def get_report(self, run_id: UUID) -> tuple[object, list[object]] | None: ...
+    def run_full(
+        self,
+        suite: str,
+        git_sha: str = "unknown",
+        document_slugs: Sequence[str] | None = None,
+        config: dict[str, object] | None = None,
+        judge: bool = False,
+    ) -> tuple[object, UUID]: ...
+    def run_retrieval(
+        self,
+        suite: str,
+        git_sha: str = "unknown",
+        document_slugs: Sequence[str] | None = None,
+        config: dict[str, object] | None = None,
+    ) -> object: ...
+
+
+class _IngestionProto(Protocol):
+    def ingest(self, pdf_path: object, doc_meta: object) -> object: ...
 
 
 @dataclass
@@ -98,6 +118,11 @@ class StubAsk:
 class StubEvals:
     runs: list[object] = field(default_factory=list)
     reports: dict[UUID, tuple[object, list[object]]] = field(default_factory=dict)
+    # POST /eval/runs (AD-5): what run_full/run_retrieval return, or an
+    # exception to raise (the "eval_run_failed" job path).
+    full_result: tuple[object, UUID] | None = None
+    retrieval_result: object | None = None
+    run_error: Exception | None = None
 
     def list_runs(self) -> list[object]:
         return self.runs
@@ -105,13 +130,53 @@ class StubEvals:
     def get_report(self, run_id: UUID) -> tuple[object, list[object]] | None:
         return self.reports.get(run_id)
 
+    def run_full(
+        self,
+        suite: str,
+        git_sha: str = "unknown",
+        document_slugs: Sequence[str] | None = None,
+        config: dict[str, object] | None = None,
+        judge: bool = False,
+    ) -> tuple[object, UUID]:
+        if self.run_error is not None:
+            raise self.run_error
+        assert self.full_result is not None, "StubEvals.full_result not set"
+        return self.full_result
+
+    def run_retrieval(
+        self,
+        suite: str,
+        git_sha: str = "unknown",
+        document_slugs: Sequence[str] | None = None,
+        config: dict[str, object] | None = None,
+    ) -> object:
+        if self.run_error is not None:
+            raise self.run_error
+        assert self.retrieval_result is not None, "StubEvals.retrieval_result not set"
+        return self.retrieval_result
+
+
+@dataclass
+class StubIngestion:
+    # POST /documents (AD-5): what ingest() returns, or an exception to raise.
+    report: object | None = None
+    error: Exception | None = None
+    calls: list[tuple[object, object]] = field(default_factory=list)
+
+    def ingest(self, pdf_path: object, doc_meta: object) -> object:
+        self.calls.append((pdf_path, doc_meta))
+        if self.error is not None:
+            raise self.error
+        assert self.report is not None, "StubIngestion.report not set"
+        return self.report
+
 
 @dataclass
 class StubServices:
     library: StubLibrary = field(default_factory=StubLibrary)
     ask: StubAsk = field(default_factory=StubAsk)
     evals: StubEvals = field(default_factory=StubEvals)
-    # ingestion unused by the read routes.
+    ingestion: StubIngestion = field(default_factory=StubIngestion)
 
 
 @dataclass(frozen=True)
@@ -120,6 +185,15 @@ class StubSettings:
     groq_model: str = "openai/gpt-oss-120b"
     llm_provider: str = "groq"
     reranker_enabled: bool = True
+    # Retrieval/fusion config (POST /eval/runs' config_snapshot, AD-5 mirrors
+    # the CLI's eval_run command exactly -- see WEEK4_INSTRUCTIONS.md AD-5).
+    embedding_model: str = "BAAI/bge-m3"
+    reranker_model: str = "BAAI/bge-reranker-v2-m3"
+    rrf_k: int = 60
+    candidates_dense: int = 30
+    candidates_lexical: int = 30
+    fused_k: int = 20
+    context_k: int = 6
 
 
 # --- fixtures ----------------------------------------------------------------
@@ -154,6 +228,11 @@ def make_client() -> Iterator[Callable[[StubServices | None], TestClient]]:
         app.dependency_overrides[get_services] = lambda: svc
         app.dependency_overrides[get_app_settings] = lambda: StubSettings()
         app.state.services = svc
+        # get_jobs is NOT overridden -- JobRegistry is real, dependency-free
+        # (in-memory only, AD-5), so tests use it directly rather than a stub.
+        # Set here (not via the lifespan) because bare TestClient(app) -- no
+        # `with` block -- does not reliably run lifespan in this version.
+        app.state.jobs = JobRegistry()
         created.append(app)
         return TestClient(app)
 
@@ -171,6 +250,7 @@ def client(make_client: Callable[[StubServices | None], TestClient]) -> TestClie
 __all__ = [
     "StubAsk",
     "StubEvals",
+    "StubIngestion",
     "StubLibrary",
     "StubServices",
     "StubSettings",
@@ -180,4 +260,4 @@ __all__ = [
 
 
 # Avoid an unused-import lint for the protocol helpers used only for typing.
-_ = (_LibraryProto, _AskProto, _EvalsProto, app_main, Sequence)
+_ = (_LibraryProto, _AskProto, _EvalsProto, _IngestionProto, app_main, Sequence)

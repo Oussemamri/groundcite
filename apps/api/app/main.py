@@ -20,12 +20,14 @@ from fastapi import FastAPI, Request
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.errors import install_exception_handlers
+from app.jobs import JobRegistry
 from app.logging_conf import configure_logging, get_logger
 from app.routes.asks import router as asks_router
 from app.routes.asks_stream import router as asks_stream_router
 from app.routes.documents import router as documents_router
 from app.routes.evals import router as evals_router
 from app.routes.health import router as health_router
+from app.routes.jobs import router as jobs_router
 from groundcite.config import get_settings
 from groundcite.container import build_services
 
@@ -37,6 +39,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     log = get_logger("app.startup")
     settings = get_settings()
     app.state.services = build_services(settings)
+    # AD-5: one process-wide job registry (in-memory, single-tenant v1).
+    app.state.jobs = JobRegistry()
     log.info("services_built", tau_retrieval=settings.tau_retrieval, groq_model=settings.groq_model)
     yield
     app.state.services = None
@@ -72,7 +76,7 @@ def create_app() -> FastAPI:
     app.include_router(asks_router)
     app.include_router(asks_stream_router)
     app.include_router(evals_router)
-    # The write routes (documents upload, eval trigger, jobs) land in Phase 4.
+    app.include_router(jobs_router)
     return app
 
 
