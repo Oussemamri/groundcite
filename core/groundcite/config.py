@@ -65,14 +65,20 @@ class Settings(BaseSettings):
 
     # --- LLM generation models (AD-1; spec §17 rule 9: model names live ONLY in
     # these config defaults, never in code). One OpenAI-compatible client serves
-    # all three providers. The Groq default is the spec §11 guess, still present
-    # in the live catalog on 2026-07-15 (17 models); Phase 6 re-evaluates the
-    # candidate set (llama-3.3-70b-versatile / openai/gpt-oss-120b /
-    # meta-llama/llama-4-scout-17b-16e-instruct) with real citation numbers and
-    # may change this default in a measured commit. The openai/ollama factories
-    # are written per AD-1 but UNEXERCISED this week — their names are not
-    # verified against a live provider now (spec §11 last row).
-    groq_model: str = "llama-3.3-70b-versatile"
+    # all three providers. Switched from llama-3.3-70b-versatile (the spec §11
+    # guess) to gpt-oss-120b in Phase 6, smoke-tested directly (2 live calls:
+    # grounded + must-abstain, both correct, valid JSON, latency in line with
+    # the original llama-3.3-70b-versatile transcripts) but NOT run through a
+    # full 3-way eval-off against meta-llama/llama-4-scout-17b-16e-instruct —
+    # the deciding factor was operational, not a citation-quality comparison:
+    # llama-3.3-70b-versatile's free-tier Groq quota is 100K tokens/day, which
+    # doesn't even cover the 40-case core suite once (~4,125 tokens/case
+    # observed); gpt-oss-120b's quota is 200K tokens/day, enough to finish the
+    # full 60-case tuned eval same-day instead of spread across 2-3 days. See
+    # docs/WEEK3_RESULTS.md. The openai/ollama factories are written per AD-1
+    # but UNEXERCISED this week — their names are not verified against a live
+    # provider now (spec §11 last row).
+    groq_model: str = "openai/gpt-oss-120b"
     openai_model: str = "gpt-4o-mini"
     ollama_model: str = "llama3.1"
     # Groq's OpenAI-compatible base URL (AD-1). OpenAI LLC base URL is the SDK
