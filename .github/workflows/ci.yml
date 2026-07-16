@@ -1,7 +1,15 @@
-# CI (spec §4.1, §17 rule 7). Gates every change on the core quality bar:
-# ruff (lint + format), mypy --strict, import-linter (§4 dependency rule), pytest.
-# The 12-case eval-smoke gate (spec §8) is added once the eval harness exists
-# (Week 3).
+# CI (spec §4.1, §17 rule 7). Three jobs, one per interface (core/api/web).
+# core: ruff (lint + format), mypy --strict, import-linter (§4 dependency
+# rule), pytest -- now against a REAL Postgres service container + migrations
+# (Week 4 AD-8): connectivity/schema-dependent integration tests actually
+# execute; corpus-DATA-dependent ones still skip gracefully (no ingested
+# corpus in CI -- a seeded-fixture strategy remains a deferred decision, not
+# solved here). api: ruff, mypy, pytest -- no DB in this job, so its own
+# live-DB integration tests auto-skip by design (unreachable), same pattern
+# as core's before this change. web: tsc --noEmit, eslint, next build.
+# Real-embedding evals (scripts/check_baseline.py, `eval run --full`) stay
+# manual/local: the models are multi-GB and a full run costs real
+# minutes-to-tens-of-minutes -- wrong cost/flake budget for per-commit CI.
 name: CI
 
 on:
@@ -20,9 +28,30 @@ jobs:
     defaults:
       run:
         working-directory: core
+    # Same user/pass/db/port as docker-compose.yml and Settings' class
+    # default (postgresql+psycopg://groundcite:groundcite@localhost:5433/
+    # groundcite) -- matching them means zero DATABASE_URL override needed;
+    # the existing default just resolves correctly inside the runner.
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: groundcite
+          POSTGRES_PASSWORD: groundcite
+          POSTGRES_DB: groundcite
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U groundcite -d groundcite"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
-      # actions/checkout v5 is the current major.
-      - uses: actions/checkout@v5
+      # actions/checkout v7 is the current major (bumped from v5, Week 4 Phase 5 --
+      # v6/v7 add safer default handling for fork pull_request_target/workflow_run
+      # checkouts; not directly relevant to this repo's push-only triggers, but
+      # staying current matches CLAUDE.md rule 12's "verify at build time").
+      - uses: actions/checkout@v7
 
       # astral-sh/setup-uv v8 line (current major). v8.0.0 stopped publishing
       # moving major/minor tags for supply-chain security (immutable releases),
@@ -48,5 +77,76 @@ jobs:
       - name: import-linter (dependency rule)
         run: uv run lint-imports
 
+      - name: Apply migrations (empty schema -- no corpus seeded, AD-8)
+        run: uv run alembic upgrade head
+
       - name: pytest
         run: uv run pytest
+
+  api:
+    name: api (lint · typecheck · pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.3.2
+        with:
+          python-version: "3.13"
+          enable-cache: true
+
+      # groundcite[embed,rerank,llm,pdf]: apps/api's own dependency on core
+      # requests these extras directly (see apps/api/pyproject.toml) -- a
+      # real uvicorn instance needs the live pipeline, so there is no
+      # "no-extras" variant to test separately here (unlike core's CI job,
+      # which deliberately never installs extras).
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Ruff (lint)
+        run: uv run ruff check .
+
+      - name: Ruff (format)
+        run: uv run ruff format --check .
+
+      - name: mypy (strict)
+        run: uv run mypy app tests
+
+      # No Postgres service here (deliberately, AD-8): tests/integration's
+      # own _require_db fixture skips the whole module on an unreachable DB
+      # -- exactly what happens in this job, by design, not an oversight.
+      - name: pytest
+        run: uv run pytest
+
+  web:
+    name: web (typecheck · lint · build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v7
+
+      # actions/setup-node v6 is the current major (v4 is stale; v6 runs on
+      # the node24 actions runtime GitHub migrated to in 2026).
+      - name: Install Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
