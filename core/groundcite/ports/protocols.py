@@ -186,12 +186,25 @@ class Repository(Protocol):
 
     def get_chunk(self, chunk_id: UUID) -> Chunk | None: ...
 
+    def list_chunks(self, document_id: UUID) -> list[Chunk]:
+        """All chunks of one Document, ordered by ``clause_path`` (spec §10 reader
+        page). Week 4 AD-4: ``get_chunk`` is by-id only; the reader needs the
+        ordered chunk list. 1,573 chunks for far-25 renders acceptably in v1
+        (no speculative pagination)."""
+
     # --- asks / citations ---
     def save_ask(self, ask: Ask, citations: Sequence[Citation]) -> None:
         """Persist one ask row + its citation rows in one transaction (AD-6).
         ``citations`` may be empty (abstentions have no citations)."""
 
     def get_ask(self, ask_id: UUID) -> Ask | None: ...
+
+    def get_ask_citations(self, ask_id: UUID) -> list[Citation]:
+        """The citations of one Ask, ordered by ``rank`` (Week 4 AD-4). Powers
+        ``GET /asks/{id}`` replay (spec §9: "answer + citations + debug"). The
+        ``citations`` table stores chunk_id/rank/score but not clause_path, so
+        the adapter joins ``chunks`` to populate ``Citation.clause_path``;
+        ``claim`` is transient and stays None on read."""
 
     # --- evals ---
     def load_suite(self, suite: str) -> list[EvalCase]: ...
@@ -211,3 +224,6 @@ class Repository(Protocol):
     def get_eval_results(self, run_id: UUID) -> list[EvalResult]:
         """Per-Case results for a past Run, in Case order (``groundcite eval
         report <run-id>``, Phase 5)."""
+
+    def list_eval_runs(self) -> list[EvalRun]:
+        """All eval Runs, newest first (Week 4 AD-4). Powers ``GET /eval/runs``."""

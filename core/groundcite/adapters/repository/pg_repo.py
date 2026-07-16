@@ -161,6 +161,16 @@ class PgRepository:
             ).fetchone()
         return _chunk_from_row(row) if row else None
 
+    def list_chunks(self, document_id: UUID) -> list[Chunk]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """SELECT id, document_id, section_id, clause_path, content,
+                          token_count, page_start, page_end, metadata
+                   FROM chunks WHERE document_id = %s ORDER BY clause_path""",
+                (document_id,),
+            ).fetchall()
+        return [_chunk_from_row(r) for r in rows]
+
     # --- asks / citations (one transaction, AD-6) --------------------------------
 
     def save_ask(self, ask: Ask, citations: Sequence[Citation]) -> None:
@@ -215,6 +225,30 @@ class PgRepository:
             pipeline_debug=row[7] or {},  # psycopg3 auto-deserializes jsonb to dict
             created_at=row[8],
         )
+
+    def get_ask_citations(self, ask_id: UUID) -> list[Citation]:
+        # The citations table stores chunk_id/rank/score only; join chunks to
+        # materialize clause_path for replay (AD-4). claim is transient and not
+        # persisted, so it stays None on read. Ordered by rank (spec §9 replay).
+        with self._connect() as conn:
+            rows = conn.execute(
+                """SELECT c.chunk_id, c.rank, c.score, ch.clause_path
+                   FROM citations c
+                   JOIN chunks ch ON ch.id = c.chunk_id
+                   WHERE c.ask_id = %s
+                   ORDER BY c.rank""",
+                (ask_id,),
+            ).fetchall()
+        return [
+            Citation(
+                chunk_id=r[0],
+                rank=r[1],
+                score=r[2],
+                claim=None,
+                clause_path=r[3],
+            )
+            for r in rows
+        ]
 
     # --- evals (functional stubs; full harness lands Week 3) ------------
 
@@ -337,6 +371,15 @@ class PgRepository:
             )
             for r in rows
         ]
+
+    def list_eval_runs(self) -> list[EvalRun]:
+        # Newest first (AD-4): runs stamp started_at = now() at insert, so
+        # ORDER BY started_at DESC gives execution order with the latest on top.
+        with self._connect() as conn:
+            rows = conn.execute(
+                """SELECT id, git_sha, config FROM eval_runs ORDER BY started_at DESC"""
+            ).fetchall()
+        return [EvalRun(id=r[0], git_sha=r[1], config=r[2] or {}) for r in rows]
 
 
 # --- row mappers ---------------------------------------------------------

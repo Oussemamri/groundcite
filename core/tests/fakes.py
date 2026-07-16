@@ -222,12 +222,23 @@ class FakeRepository:
                     return c
         return None
 
+    def list_chunks(self, document_id: UUID) -> list[Chunk]:
+        slug = next((s for s, d in self.documents.items() if d.id == document_id), None)
+        if not slug:
+            return []
+        return sorted(self.chunks.get(slug, ()), key=lambda c: c.clause_path)
+
     def save_ask(self, ask: Ask, citations: Sequence[Citation]) -> None:
         self.asks[ask.id] = ask
         self.citations[ask.id] = list(citations)
 
     def get_ask(self, ask_id: UUID) -> Ask | None:
         return self.asks.get(ask_id)
+
+    def get_ask_citations(self, ask_id: UUID) -> list[Citation]:
+        # Citation.clause_path/claim are already materialized at save time on the
+        # FakeRepository (no chunks join needed); order by rank (spec §9 replay).
+        return sorted(self.citations.get(ask_id, ()), key=lambda c: c.rank)
 
     def load_suite(self, suite: str) -> list[EvalCase]:
         return []
@@ -245,3 +256,8 @@ class FakeRepository:
 
     def get_eval_results(self, run_id: UUID) -> list[EvalResult]:
         return list(self.eval_results.get(run_id, ()))
+
+    def list_eval_runs(self) -> list[EvalRun]:
+        # Newest first: insertion order reversed mirrors ``eval_runs ORDER BY
+        # started_at DESC`` (runs are inserted in order of execution).
+        return list(reversed(self.eval_runs.values()))

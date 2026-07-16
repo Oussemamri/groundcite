@@ -121,7 +121,7 @@ def build_services(settings: Settings) -> Services:
             load_suite=make_jsonl_suite_loader(settings.eval_suites_dir),
             repository=repository,
         ),
-        library=LibraryService(),
+        library=LibraryService(repository=repository),
     )
 
 
