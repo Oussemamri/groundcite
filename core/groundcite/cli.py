@@ -264,6 +264,14 @@ def eval_run(
         "context_k": settings.context_k,
     }
     if full:
+        # tau_retrieval is THE Gate A knob (AD-3) -- it must be in every
+        # full-mode run's persisted config, not just recall/fusion params.
+        # Its absence here is exactly how a stale local .env (TAU_RETRIEVAL
+        # left at the spec's 0.35 after Phase 6 tuned config.py's default to
+        # 0.70) went undetected through three live re-runs: nothing in the
+        # persisted eval_runs.config would have shown the drift.
+        config_snapshot["tau_retrieval"] = settings.tau_retrieval
+        config_snapshot["groq_model"] = settings.groq_model
         config_snapshot["llm_provider"] = settings.llm_provider
         config_snapshot["judge"] = judge
 
