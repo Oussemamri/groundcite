@@ -33,3 +33,8 @@ class LibraryService:
 
     def list_chunks(self, document_id: UUID) -> list[Chunk]:
         return self._repository.list_chunks(document_id)
+
+    def get_chunk(self, chunk_id: UUID) -> Chunk | None:
+        """Citation-resolution read for ``GET /chunks/{id}`` (spec §9). Delegates
+        to Repository (by-id, not ordered) so the API owns no adapter reference."""
+        return self._repository.get_chunk(chunk_id)

@@ -200,6 +200,21 @@ class AskService:
             )
         return self._ask_events(question, document_slugs)
 
+    # --- replay reads (Week 4: ``GET /asks/{id}``, spec §9) -------------------
+    # Thin Repository delegates so the API owns no adapter reference (§4
+    # dependency rule). None when no repository is wired (mirrors the optional
+    # repository in container), matching EvalService.get_report's contract.
+
+    def get_ask(self, ask_id: UUID) -> Ask | None:
+        if self._repository is None:
+            return None
+        return self._repository.get_ask(ask_id)
+
+    def get_ask_citations(self, ask_id: UUID) -> list[Citation]:
+        if self._repository is None:
+            return []
+        return self._repository.get_ask_citations(ask_id)
+
     def _ask_events(
         self, question: str, document_slugs: Sequence[str] | None
     ) -> Iterator[AskEvent]:

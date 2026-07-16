@@ -63,6 +63,10 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["groundcite"]
+# PEP 561 marker — lets consumers (apps/api) type-check against groundcite.
+# The core package is fully typed (mypy --strict); without this marker, mypy
+# in apps/api treats groundcite as untyped (import-untyped), which is wrong.
+force-include = { "groundcite/py.typed" = "groundcite/py.typed" }
 
 [dependency-groups]
 dev = [

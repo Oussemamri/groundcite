@@ -1,19 +1,37 @@
-"""FastAPI dependencies (spec §9).
+"""FastAPI dependencies (spec §9, AD-1).
 
-Bridges the interface layer to the core composition root: settings come from
-``groundcite.config`` and services from ``groundcite.container.build_services``.
-Used by route handlers via ``Depends`` in Week 4.
+Services are a process-wide singleton built ONCE in the app lifespan (AD-1):
+the reranker/embedder adapters lazy-load ~2GB of models — per-request
+construction (the P5 skeleton) would reload them per call. ``get_services``
+returns the singleton from ``app.state.services``. Routes should never construct
+services or import adapters (spec §4 dependency rule).
 """
 
 from __future__ import annotations
 
+from fastapi import Request
+
 from groundcite.config import Settings, get_settings
-from groundcite.container import Services, build_services
+from groundcite.container import Services
 
 
 def get_app_settings() -> Settings:
+    """Live settings (resolves the ``.env``-backed config, spec §11)."""
     return get_settings()
 
 
-def get_services() -> Services:
-    return build_services(get_settings())
+def get_services(request: Request) -> Services:
+    """Return the process-wide Services singleton (AD-1).
+
+    Built in ``main.create_app``'s lifespan startup and stored on
+    ``app.state.services``. Unit tests replace this dependency via
+    ``app.dependency_overrides`` (AD-7); the live TestClient / ``uvicorn`` path
+    runs the lifespan so the singleton exists.
+    """
+    services: Services | None = getattr(request.app.state, "services", None)
+    if services is None:  # pragma: no cover - lifespan always runs under uvicorn/TestClient
+        raise RuntimeError(
+            "app.state.services is unset — the lifespan startup did not run. "
+            "Use TestClient (runs lifespan) or dependency_overrides (AD-7)."
+        )
+    return services

@@ -307,3 +307,11 @@ class EvalService:
         if run is None:
             return None
         return run, self._repository.get_eval_results(run_id)
+
+    def list_runs(self) -> list[EvalRun]:
+        """All eval Runs, newest first (Week 4: ``GET /eval/runs``). Thin
+        Repository delegate so the API owns no adapter reference (§4 dependency
+        rule). Empty when no repository is wired."""
+        if self._repository is None:
+            return []
+        return self._repository.list_eval_runs()

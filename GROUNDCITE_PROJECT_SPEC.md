@@ -389,7 +389,12 @@ Rules: routes are thin (parse → service → serialize); pydantic response mode
 | Eval judge metrics | **Ragas** (faithfulness, context precision ONLY) | canonical, academically grounded | DeepEval |
 | LLM client (all 3 generation providers) | **`openai` SDK** — one OpenAI-compatible client serves Groq (`api.groq.com/openai/v1`), OpenAI, and Ollama (`localhost:11434/v1`) | zero custom SSE/HTTP; §11.1 "model inference (generate)" = Buy; port stays swappable | hand-rolled httpx streaming |
 | Python tooling | uv, ruff, mypy(strict core), pytest, Alembic | modern, fast | — |
-| Verify model names + library versions at build time — this landscape changes monthly. Pin everything. | | | |
+| **API SSE plumbing** | **`sse-starlette`** (`EventSourceResponse` over the sync `ask()` generator; starlette iterates sync iterators in a threadpool) | spec §11.1 Buy; spec §7 one event enum shared with web | hand-rolled raw `StreamingResponse` (rejected: headers/keep-alive/disconnect handling) |
+| **API logging** | **`structlog`** (JSON to stdout, API layer only; core stays logfree) | spec §12 names it; `ask_id` bound per request | stdlib `logging` |
+| **API multipart uploads** | **`python-multipart`** (FastAPI requires it for `POST /documents`) | spec §9 | hand-rolled multipart parser (rejected) |
+| **API test client** | **`httpx`** (Starlette `TestClient` requires it; DEV-only, not runtime) | AD-7 unit tests via `dependency_overrides` | — |
+| **API server** | **FastAPI + uvicorn[standard]** | spec §9 (= Buy; the routes/services are Build) | — |
+| Verify model names + library versions at build time — this landscape changes monthly. Pin everything (§17 rule 12; `apps/api` deps pinned `==`, `uv.lock` + `package-lock.json` committed). | | | |
 
 ### 11.1 Build vs. buy boundary (the line you defend in interviews)
 **Buy (libraries):** PDF parsing, model inference (embed/rerank/generate), judge-metric math, SSE plumbing (`sse-starlette`), DB drivers (`pgvector-python` — steal its hybrid-search SQL shapes).
