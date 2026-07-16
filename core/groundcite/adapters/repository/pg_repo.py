@@ -22,6 +22,16 @@ import psycopg
 from groundcite.domain.entities import Ask, Chunk, Document, EvalCase, Section
 from groundcite.domain.results import AskStatus, Citation, EvalResult, EvalRun
 
+# `suite` is not a real eval_runs column (rule 2: no schema change for a
+# derived value) -- every eval_results row for a run points at a case sharing
+# one suite (Week 5 AD-2), so this correlated subquery reads it off the first
+# joined case rather than the frontend re-deriving it from per-case data.
+_RUN_SUITE_SUBQUERY = """(
+    SELECT ec.suite FROM eval_results er
+    JOIN eval_cases ec ON ec.id = er.case_id
+    WHERE er.run_id = eval_runs.id LIMIT 1
+)"""
+
 
 class PgRepository:
     """Postgres Repository (spec §5, §6 idempotency)."""
@@ -341,12 +351,15 @@ class PgRepository:
     def get_eval_run(self, run_id: UUID) -> EvalRun | None:
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT id, git_sha, config FROM eval_runs WHERE id = %s",
+                f"""SELECT id, git_sha, config, started_at, {_RUN_SUITE_SUBQUERY} AS suite
+                    FROM eval_runs WHERE id = %s""",
                 (run_id,),
             ).fetchone()
         if row is None:
             return None
-        return EvalRun(id=row[0], git_sha=row[1], config=row[2] or {})
+        return EvalRun(
+            id=row[0], git_sha=row[1], config=row[2] or {}, started_at=row[3], suite=row[4]
+        )
 
     def get_eval_results(self, run_id: UUID) -> list[EvalResult]:
         with self._connect() as conn:
@@ -377,9 +390,36 @@ class PgRepository:
         # ORDER BY started_at DESC gives execution order with the latest on top.
         with self._connect() as conn:
             rows = conn.execute(
-                """SELECT id, git_sha, config FROM eval_runs ORDER BY started_at DESC"""
+                f"""SELECT id, git_sha, config, started_at, {_RUN_SUITE_SUBQUERY} AS suite
+                    FROM eval_runs ORDER BY started_at DESC"""
             ).fetchall()
-        return [EvalRun(id=r[0], git_sha=r[1], config=r[2] or {}) for r in rows]
+        return [
+            EvalRun(id=r[0], git_sha=r[1], config=r[2] or {}, started_at=r[3], suite=r[4])
+            for r in rows
+        ]
+
+    def get_eval_cases(self, case_ids: Sequence[UUID]) -> dict[UUID, EvalCase]:
+        if not case_ids:
+            return {}
+        with self._connect() as conn:
+            rows = conn.execute(
+                """SELECT id, suite, question, expected_clauses, expected_facts,
+                          must_abstain, language
+                   FROM eval_cases WHERE id = ANY(%s)""",
+                (list(case_ids),),
+            ).fetchall()
+        return {
+            r[0]: EvalCase(
+                id=r[0],
+                suite=r[1],
+                question=r[2],
+                expected_clauses=tuple(r[3]),
+                expected_facts=tuple(r[4]),
+                must_abstain=r[5],
+                language=r[6],
+            )
+            for r in rows
+        }
 
 
 # --- row mappers ---------------------------------------------------------

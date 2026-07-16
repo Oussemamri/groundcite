@@ -7,6 +7,7 @@ source of truth for the SSE contract (spec §7) that both ``apps/api`` and
 
 from __future__ import annotations
 
+from datetime import datetime
 from enum import StrEnum
 from uuid import UUID
 
@@ -137,11 +138,21 @@ class AskEvent(_Frozen):
 
 
 class EvalRun(_Frozen):
-    """A single execution of an eval Suite (spec §5 eval_runs, §8)."""
+    """A single execution of an eval Suite (spec §5 eval_runs, §8).
+
+    ``started_at`` and ``suite`` are both optional reads (Week 5 AD-2): the
+    write path (``EvalService.run_full``/``run_retrieval``) never sets them —
+    ``eval_runs.started_at`` defaults to ``now()`` at insert and ``suite`` is
+    derived by joining the run's Cases (all Cases in one run share a suite),
+    not a real column. Both surface on the read paths (``get_eval_run``,
+    ``list_eval_runs``) for the `/evals` runs table (recency + suite label).
+    """
 
     id: UUID
     git_sha: str
     config: dict[str, object] = Field(default_factory=dict)
+    started_at: datetime | None = None
+    suite: str | None = None
 
 
 class EvalResult(_Frozen):

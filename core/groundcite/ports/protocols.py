@@ -227,3 +227,10 @@ class Repository(Protocol):
 
     def list_eval_runs(self) -> list[EvalRun]:
         """All eval Runs, newest first (Week 4 AD-4). Powers ``GET /eval/runs``."""
+
+    def get_eval_cases(self, case_ids: Sequence[UUID]) -> dict[UUID, EvalCase]:
+        """Case metadata (question/expected_clauses/must_abstain/language) for a
+        set of case ids, keyed by id (Week 5 AD-2). Powers the `/evals` per-case
+        drill-down: ``eval_results`` stores metrics keyed by ``case_id`` but not
+        the Case's own fields, which live in ``eval_cases`` and are otherwise
+        never joined on read. Unknown ids are simply absent from the result."""

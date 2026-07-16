@@ -112,6 +112,30 @@ def test_live_eval_runs_list(live_client: TestClient) -> None:
     assert isinstance(r.json(), list)
 
 
+def test_live_eval_run_detail_carries_case_metadata(live_client: TestClient) -> None:
+    """Week 5 AD-2: a real run's per-case results carry question/expected_clauses
+    joined from eval_cases, not just the metric columns."""
+    runs = live_client.get("/api/v1/eval/runs").json()
+    assert runs, "no eval runs in DB -- expected 13 persisted (Week 5 §1)"
+    # A FULL run has results with recall/citation_precision populated; find one.
+    full_run = next((r for r in runs if r["config"].get("groq_model")), runs[0])
+
+    r = live_client.get(f"/api/v1/eval/runs/{full_run['id']}")
+    assert r.status_code == 200
+    body = r.json()
+
+    assert body["run"]["suite"] is not None
+    assert body["run"]["started_at"] is not None
+    assert body["results"], "run has no per-case results"
+    for result in body["results"]:
+        assert result["question"], f"case {result['case_id']} missing question"
+        assert isinstance(result["expected_clauses"], list)
+        assert result["must_abstain"] is not None
+    agg = body["aggregates"]
+    assert agg["scored_cases"] == len(body["results"])
+    assert 0.0 <= agg["abstention_accuracy"] <= 1.0
+
+
 def test_live_sse_ask_must_abstain_costs_no_tokens(live_client: TestClient) -> None:
     # Out-of-corpus question -> Gate A abstains on the reranker score alone,
     # before any LLM call (prompt_tokens/completion_tokens both 0) -- real

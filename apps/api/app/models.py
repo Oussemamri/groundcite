@@ -13,10 +13,10 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.jobs import Job
-from groundcite.domain.entities import Ask, Chunk, Document, Section
+from groundcite.domain.entities import Ask, Chunk, Document, EvalCase, Section
 from groundcite.domain.results import Citation, EvalResult, EvalRun
 
 
@@ -148,15 +148,30 @@ class EvalRunOut(_Out):
     id: UUID
     git_sha: str
     config: dict[str, object]
+    started_at: datetime | None = None
+    suite: str | None = None
 
     @classmethod
     def from_domain(cls, r: EvalRun) -> EvalRunOut:
-        return cls(id=r.id, git_sha=r.git_sha, config=r.config)
+        return cls(
+            id=r.id,
+            git_sha=r.git_sha,
+            config=r.config,
+            started_at=r.started_at,
+            suite=r.suite,
+        )
 
 
 class EvalResultOut(_Out):
     run_id: UUID
     case_id: UUID
+    # Case metadata (Week 5 AD-2) -- not on EvalResult itself; joined from
+    # eval_cases via EvalService.get_cases. None when the case id is unknown
+    # (should not happen for a real run, but never silently fabricated).
+    question: str | None = None
+    expected_clauses: list[str] = Field(default_factory=list)
+    must_abstain: bool | None = None
+    language: str | None = None
     recall_at_5: float | None = None
     recall_at_10: float | None = None
     mrr: float | None = None
@@ -167,10 +182,14 @@ class EvalResultOut(_Out):
     debug: dict[str, object]
 
     @classmethod
-    def from_domain(cls, r: EvalResult) -> EvalResultOut:
+    def from_domain(cls, r: EvalResult, case: EvalCase | None = None) -> EvalResultOut:
         return cls(
             run_id=r.run_id,
             case_id=r.case_id,
+            question=case.question if case is not None else None,
+            expected_clauses=list(case.expected_clauses) if case is not None else [],
+            must_abstain=case.must_abstain if case is not None else None,
+            language=case.language if case is not None else None,
             recall_at_5=r.recall_at_5,
             recall_at_10=r.recall_at_10,
             mrr=r.mrr,
@@ -182,9 +201,43 @@ class EvalResultOut(_Out):
         )
 
 
+class EvalRunAggregatesOut(_Out):
+    """Per-run headline metrics (Week 5 AD-2/AD-4), computed HERE from the
+    already-persisted per-case rows -- never by re-running (rule 4). Mirrors
+    ``FullEvalReport``'s own definitions (``services/eval.py`` run_full, NOT
+    touched this week): abstention_accuracy = mean(passed), mean_citation_precision
+    over cases that carry one, recall/MRR means over cases with a value."""
+
+    scored_cases: int
+    mean_recall_at_5: float | None = None
+    mean_recall_at_10: float | None = None
+    mean_mrr: float | None = None
+    mean_citation_precision: float | None = None
+    abstention_accuracy: float | None = None
+
+    @classmethod
+    def from_results(cls, results: list[EvalResult]) -> EvalRunAggregatesOut:
+        def _mean(vals: list[float]) -> float | None:
+            return sum(vals) / len(vals) if vals else None
+
+        return cls(
+            scored_cases=len(results),
+            mean_recall_at_5=_mean([r.recall_at_5 for r in results if r.recall_at_5 is not None]),
+            mean_recall_at_10=_mean(
+                [r.recall_at_10 for r in results if r.recall_at_10 is not None]
+            ),
+            mean_mrr=_mean([r.mrr for r in results if r.mrr is not None]),
+            mean_citation_precision=_mean(
+                [r.citation_precision for r in results if r.citation_precision is not None]
+            ),
+            abstention_accuracy=_mean([1.0 if r.passed else 0.0 for r in results]),
+        )
+
+
 class EvalRunDetailOut(_Out):
     run: EvalRunOut
     results: list[EvalResultOut]
+    aggregates: EvalRunAggregatesOut
 
 
 class JobOut(_Out):

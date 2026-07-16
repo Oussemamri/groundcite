@@ -315,3 +315,11 @@ class EvalService:
         if self._repository is None:
             return []
         return self._repository.list_eval_runs()
+
+    def get_cases(self, case_ids: Sequence[UUID]) -> dict[UUID, EvalCase]:
+        """Case metadata for a set of case ids (Week 5 AD-2: `/evals` per-case
+        drill-down). Thin Repository delegate, same shape as ``list_runs``.
+        Empty when no repository is wired."""
+        if self._repository is None:
+            return {}
+        return self._repository.get_eval_cases(case_ids)

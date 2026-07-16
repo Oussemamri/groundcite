@@ -261,3 +261,6 @@ class FakeRepository:
         # Newest first: insertion order reversed mirrors ``eval_runs ORDER BY
         # started_at DESC`` (runs are inserted in order of execution).
         return list(reversed(self.eval_runs.values()))
+
+    def get_eval_cases(self, case_ids: Sequence[UUID]) -> dict[UUID, EvalCase]:
+        return {cid: self.eval_cases[cid] for cid in case_ids if cid in self.eval_cases}

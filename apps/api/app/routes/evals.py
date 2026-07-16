@@ -24,7 +24,7 @@ from app.deps import get_app_settings, get_jobs, get_services
 from app.errors import NotFoundError
 from app.jobs import JobKind, JobRegistry
 from app.logging_conf import get_logger
-from app.models import EvalResultOut, EvalRunDetailOut, EvalRunOut, JobOut
+from app.models import EvalResultOut, EvalRunAggregatesOut, EvalRunDetailOut, EvalRunOut, JobOut
 from groundcite.config import Settings
 from groundcite.container import Services
 
@@ -53,9 +53,11 @@ def get_eval_run(run_id: str, services: Services = Depends(get_services)) -> Eva
     if report is None:
         raise NotFoundError(slug=run_id, label="eval run")
     run, results = report
+    cases = services.evals.get_cases([r.case_id for r in results])
     return EvalRunDetailOut(
         run=EvalRunOut.from_domain(run),
-        results=[EvalResultOut.from_domain(r) for r in results],
+        results=[EvalResultOut.from_domain(r, cases.get(r.case_id)) for r in results],
+        aggregates=EvalRunAggregatesOut.from_results(results),
     )
 
 

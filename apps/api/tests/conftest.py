@@ -46,6 +46,7 @@ class _AskProto(Protocol):
 class _EvalsProto(Protocol):
     def list_runs(self) -> list[object]: ...
     def get_report(self, run_id: UUID) -> tuple[object, list[object]] | None: ...
+    def get_cases(self, case_ids: Sequence[UUID]) -> dict[UUID, object]: ...
     def run_full(
         self,
         suite: str,
@@ -118,6 +119,9 @@ class StubAsk:
 class StubEvals:
     runs: list[object] = field(default_factory=list)
     reports: dict[UUID, tuple[object, list[object]]] = field(default_factory=dict)
+    # Case metadata keyed by id (Week 5 AD-2); the route joins these onto
+    # results by case_id, same shape as the real EvalService.get_cases.
+    cases: dict[UUID, object] = field(default_factory=dict)
     # POST /eval/runs (AD-5): what run_full/run_retrieval return, or an
     # exception to raise (the "eval_run_failed" job path).
     full_result: tuple[object, UUID] | None = None
@@ -129,6 +133,9 @@ class StubEvals:
 
     def get_report(self, run_id: UUID) -> tuple[object, list[object]] | None:
         return self.reports.get(run_id)
+
+    def get_cases(self, case_ids: Sequence[UUID]) -> dict[UUID, object]:
+        return {cid: self.cases[cid] for cid in case_ids if cid in self.cases}
 
     def run_full(
         self,
