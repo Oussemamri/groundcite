@@ -152,22 +152,6 @@ class EvalService:
         eval_rows: list[EvalResult] = []
 
         for case in cases:
-            # Cheap, LLM-free retrieval pass for the persisted recall/MRR columns
-            # (see module docstring — ask() does not expose this itself).
-            retrieval = self._ask.retrieve(
-                case.question, document_slugs=document_slugs, top_k=_EVAL_TOP_K
-            )
-            paths = [c.clause_path for c in retrieval.chunks]
-            r5 = recall_at_k(paths, case.expected_clauses, 5)
-            r10 = recall_at_k(paths, case.expected_clauses, 10)
-            rr = reciprocal_rank(paths, case.expected_clauses)
-
-            events = list(self._ask.ask(case.question, document_slugs=document_slugs))
-            terminal = next(
-                (e for e in reversed(events) if e.type in (AskEventType.FINAL, AskEventType.ERROR)),
-                None,
-            )
-
             status: AskStatus
             reason: AbstentionReason | None = None
             cited: list[str] = []
@@ -176,36 +160,71 @@ class EvalService:
             ask_id: UUID | None = None
             top_score: float | None = None
             error_message: str | None = None
+            r5: float | None = None
+            r10: float | None = None
+            rr: float | None = None
 
-            if terminal is None or terminal.type is AskEventType.ERROR:
-                status = AskStatus.ERROR
-                if terminal is None:
-                    error_message = "no terminal event (stream ended without FINAL or ERROR)"
+            try:
+                # Cheap, LLM-free retrieval pass for the persisted recall/MRR
+                # columns (see module docstring — ask() does not expose this
+                # itself).
+                retrieval = self._ask.retrieve(
+                    case.question, document_slugs=document_slugs, top_k=_EVAL_TOP_K
+                )
+                paths = [c.clause_path for c in retrieval.chunks]
+                r5 = recall_at_k(paths, case.expected_clauses, 5)
+                r10 = recall_at_k(paths, case.expected_clauses, 10)
+                rr = reciprocal_rank(paths, case.expected_clauses)
+
+                events = list(self._ask.ask(case.question, document_slugs=document_slugs))
+                terminal = next(
+                    (
+                        e
+                        for e in reversed(events)
+                        if e.type in (AskEventType.FINAL, AskEventType.ERROR)
+                    ),
+                    None,
+                )
+
+                if terminal is None or terminal.type is AskEventType.ERROR:
+                    status = AskStatus.ERROR
+                    if terminal is None:
+                        error_message = "no terminal event (stream ended without FINAL or ERROR)"
+                    else:
+                        error_message = str(terminal.data.get("message", ""))
                 else:
-                    error_message = str(terminal.data.get("message", ""))
-            else:
-                status = AskStatus(str(terminal.data["status"]))
-                latency_raw = terminal.data.get("latency_ms")
-                latency = int(latency_raw) if isinstance(latency_raw, int | float) else None
-                ask_id_raw = terminal.data.get("ask_id")
-                ask_id = UUID(str(ask_id_raw)) if ask_id_raw else None
-                if status is AskStatus.GROUNDED:
-                    answer = terminal.data["answer"]
-                    assert isinstance(answer, dict)
-                    cited = [
-                        str(c["clause_path"])
-                        for c in answer["citations"]
-                        if isinstance(c, dict) and c.get("clause_path")
-                    ]
-                    cprec = citation_precision(cited, case.expected_clauses)
-                    conf = answer.get("confidence")
-                    top_score = float(conf) if isinstance(conf, int | float) else None
-                else:  # ABSTAINED
-                    abstention = terminal.data["abstention"]
-                    assert isinstance(abstention, dict)
-                    reason = AbstentionReason(abstention["reason"])
-                    conf = abstention.get("confidence")
-                    top_score = float(conf) if isinstance(conf, int | float) else None
+                    status = AskStatus(str(terminal.data["status"]))
+                    latency_raw = terminal.data.get("latency_ms")
+                    latency = int(latency_raw) if isinstance(latency_raw, int | float) else None
+                    ask_id_raw = terminal.data.get("ask_id")
+                    ask_id = UUID(str(ask_id_raw)) if ask_id_raw else None
+                    if status is AskStatus.GROUNDED:
+                        answer = terminal.data["answer"]
+                        assert isinstance(answer, dict)
+                        cited = [
+                            str(c["clause_path"])
+                            for c in answer["citations"]
+                            if isinstance(c, dict) and c.get("clause_path")
+                        ]
+                        cprec = citation_precision(cited, case.expected_clauses)
+                        conf = answer.get("confidence")
+                        top_score = float(conf) if isinstance(conf, int | float) else None
+                    else:  # ABSTAINED
+                        abstention = terminal.data["abstention"]
+                        assert isinstance(abstention, dict)
+                        reason = AbstentionReason(abstention["reason"])
+                        conf = abstention.get("confidence")
+                        top_score = float(conf) if isinstance(conf, int | float) else None
+            except Exception as exc:
+                # A case-level infrastructure failure (e.g. a transient
+                # model-hub timeout during tokenizer load, hit live during
+                # Phase 6) must not abort the whole suite -- every other case
+                # still deserves a real result. recall/MRR stay None (never
+                # faked, AD-6) rather than a misleading 0.0; the message is
+                # captured the same way as the ask()-internal ERROR path so
+                # this is diagnosable identically either way.
+                status = AskStatus.ERROR
+                error_message = f"{type(exc).__name__}: {exc}"
 
             grounded = status is AskStatus.GROUNDED
             correct = abstention_is_correct(case.must_abstain, grounded)

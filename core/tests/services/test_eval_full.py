@@ -286,6 +286,42 @@ def test_error_case_captures_the_actual_exception_message() -> None:
     assert row.debug["error_message"] == "simulated provider failure"
 
 
+def test_a_single_cases_retrieval_crash_does_not_abort_the_whole_suite() -> None:
+    """A case-level infrastructure failure in the retrieve() companion call
+    (e.g. Phase 6's real HuggingFace Hub 504 mid-tokenizer-load) must be
+    caught per-case, not propagate and kill every remaining case in the
+    suite -- re-running a paid live suite from scratch over one transient
+    fluke is exactly the cost this guards against."""
+
+    class _ExplodingEmbedder:
+        dimension = 1024
+
+        def embed(self, texts: object) -> object:
+            raise RuntimeError("simulated transient infra failure")
+
+    c = _chunk("25.1309(b)")
+    cases = [
+        _case("q1", expected=("25.1309",)),
+        _case("q2", expected=("25.1309",)),
+    ]
+    ask = AskService(
+        embedder=_ExplodingEmbedder(),  # type: ignore[arg-type]
+        vector_index=FakeVectorIndex([(c, 0.9)]),
+        lexical_index=FakeLexicalIndex(),
+        reranker=FakeReranker({c.clause_path: 0.9}),
+        llm=FakeLLM(_valid_json(c)),
+        tau_retrieval=0.35,
+    )
+    evals = EvalService(ask=ask, load_suite=lambda _s: cases)
+    report, _ = evals.run_full("core")
+
+    assert report.total_cases == 2, "both cases must still be scored, not just the first"
+    assert report.error_cases == 2
+    assert all(c.status is AskStatus.ERROR for c in report.cases)
+    want = "RuntimeError: simulated transient infra failure"
+    assert all(c.error_message == want for c in report.cases)
+
+
 def test_run_id_is_stable_across_the_run_and_config_is_snapshotted() -> None:
     c = _chunk("25.1")
     case = _case("q?", expected=("25.1",))
