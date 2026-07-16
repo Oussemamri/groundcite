@@ -15,3 +15,12 @@
     @apply font-mono;
   }
 }
+
+/* Respect prefers-reduced-motion (the pipeline status dot and the streaming
+   cursor both use Tailwind's animate-pulse) -- stop the pulse, keep the
+   color/visibility state it conveys. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-pulse {
+    animation: none;
+  }
+}
