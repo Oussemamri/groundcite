@@ -85,9 +85,9 @@ export default function AskPage() {
               </div>
             )}
 
-            {stream.status === "abstained" && (
+            {stream.status === "abstained" && stream.final?.status === "abstained" && (
               <div className="mt-4">
-                <AbstentionCard />
+                <AbstentionCard reason={stream.final.abstention.reason} />
               </div>
             )}
 
