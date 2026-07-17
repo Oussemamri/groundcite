@@ -69,11 +69,19 @@ export interface EvalRunOut {
   id: string;
   git_sha: string;
   config: Record<string, unknown>;
+  started_at: string | null;
+  suite: string | null;
 }
 
 export interface EvalResultOut {
   run_id: string;
   case_id: string;
+  // Case metadata (Week 5 AD-2), joined from eval_cases; null when the case
+  // id is unknown (never fabricated -- should not happen for a real run).
+  question: string | null;
+  expected_clauses: string[];
+  must_abstain: boolean | null;
+  language: string | null;
   recall_at_5: number | null;
   recall_at_10: number | null;
   mrr: number | null;
@@ -84,9 +92,34 @@ export interface EvalResultOut {
   debug: Record<string, unknown>;
 }
 
+/** Shape of `EvalResultOut.debug` for a FULL-pipeline run (services/eval.py
+ * run_full, not mirrored 1:1 as its own response field since it's already a
+ * plain jsonb column -- narrows the `Record<string, unknown>` at read sites
+ * instead of adding parallel typed fields for data already on the wire). */
+export interface EvalResultDebug {
+  ask_id: string | null;
+  status: string;
+  top_score: number | null;
+  latency_ms: number | null;
+  cited_clauses: string[];
+  error_message: string | null;
+}
+
+/** Per-run headline metrics (Week 5 AD-2/AD-4), computed by the API from the
+ * already-persisted per-case rows -- never a re-run (rule 4). */
+export interface EvalRunAggregatesOut {
+  scored_cases: number;
+  mean_recall_at_5: number | null;
+  mean_recall_at_10: number | null;
+  mean_mrr: number | null;
+  mean_citation_precision: number | null;
+  abstention_accuracy: number | null;
+}
+
 export interface EvalRunDetailOut {
   run: EvalRunOut;
   results: EvalResultOut[];
+  aggregates: EvalRunAggregatesOut;
 }
 
 export interface JobOut {

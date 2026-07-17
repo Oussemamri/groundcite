@@ -394,6 +394,7 @@ Rules: routes are thin (parse → service → serialize); pydantic response mode
 | **API multipart uploads** | **`python-multipart`** (FastAPI requires it for `POST /documents`) | spec §9 | hand-rolled multipart parser (rejected) |
 | **API test client** | **`httpx`** (Starlette `TestClient` requires it; DEV-only, not runtime) | AD-7 unit tests via `dependency_overrides` | — |
 | **API server** | **FastAPI + uvicorn[standard]** | spec §9 (= Buy; the routes/services are Build) | — |
+| **Web charting** | **`recharts`** (pinned exact, `apps/web` dep) | spec §10 names it explicitly for the `/evals` chart; §11.1 charting = Buy (not a portfolio algorithm); owner-confirmed over hand-rolled SVG (Week 5 AD-4) — axis/tooltip/legend/responsive polish earns the one new web dependency for the blog screenshot page | hand-rolled SVG (viable, considered, passed over) |
 | Verify model names + library versions at build time — this landscape changes monthly. Pin everything (§17 rule 12; `apps/api` deps pinned `==`, `uv.lock` + `package-lock.json` committed). | | | |
 
 ### 11.1 Build vs. buy boundary (the line you defend in interviews)
