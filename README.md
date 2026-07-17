@@ -10,9 +10,12 @@ thousand-page PDFs where "clause 5.4.2.1b" must match *exactly*; generic RAG
 chatbots hallucinate clause numbers. In a regulated domain a wrong citation is
 worse than no answer.
 
-**Status:** Weeks 0–4 done (spec §15) — ingestion, hybrid retrieval, the eval
-harness, generation + abstention gates, and an end-to-end browser demo
-(`/ask`, `/library`, `/documents/[slug]`) all work against a live corpus. See
+**Status:** Weeks 0–5 done (spec §15) — the full milestone list: ingestion,
+hybrid retrieval, the eval harness, generation + abstention gates, an
+end-to-end browser demo (`/ask`, `/library`, `/documents/[slug]`, `/evals`)
+against a live corpus, and the honest benchmark numbers below. This is the
+last feature milestone — see [`docs/ROADMAP.md`](docs/ROADMAP.md) for scope
+armor going forward (bugfixes only from here). See
 [`GROUNDCITE_PROJECT_SPEC.md`](GROUNDCITE_PROJECT_SPEC.md) — the single source of
 truth — and [`CLAUDE.md`](CLAUDE.md) for the coding conventions that gate every
 change.
@@ -81,7 +84,10 @@ standard (default demo corpus: 14 CFR Part 25, see below) — the answer
 streams token-by-token with live clause citations, or the system abstains
 and shows its closest passages instead. Click a citation to jump to the
 exact clause in `/documents/[slug]`. `/library` lists ingested standards and
-uploads new ones.
+uploads new ones. `/evals` browses every persisted eval run — a per-suite
+metric chart plus a per-case drill-down of expected-vs-cited clauses. A
+recorded walkthrough of the full loop is in
+[`docs/demo/`](docs/demo/) if you'd rather watch than run it.
 
 ## Corpus & licensing
 
@@ -156,17 +162,21 @@ unmeasured rather than hiding the column.
 
 ## Roadmap
 
-Ingestion, hybrid retrieval, the eval harness, generation + abstention gates,
-and the `/ask` + `/library` + `/documents/[slug]` web UI shipped across Weeks
-0–4 (spec §15) — see [`docs/WEEK3_RESULTS.md`](docs/WEEK3_RESULTS.md) and
-[`docs/WEEK4_RESULTS.md`](docs/WEEK4_RESULTS.md) for real numbers and
-transcripts. Week 5 (planned: [`docs/WEEK5_INSTRUCTIONS.md`](docs/WEEK5_INSTRUCTIONS.md),
-not yet executed) adds the `/evals` page, abstention polish, a README
-benchmark table, and a blog draft — the last feature milestone (spec §15
-scope armor: after Week 5, bugfixes + the blog post only). The differentiator
-is a public, reproducible **eval harness** with real retrieval numbers
-(recall@k, MRR, citation precision, faithfulness) that gates every change in
-CI — including the honest first baseline.
+Ingestion, hybrid retrieval, the eval harness, generation + abstention
+gates, the `/ask` + `/library` + `/documents/[slug]` web UI, the `/evals`
+page, abstention polish, and this README's benchmark table shipped across
+Weeks 0–5 (spec §15) — see [`docs/WEEK3_RESULTS.md`](docs/WEEK3_RESULTS.md),
+[`docs/WEEK4_RESULTS.md`](docs/WEEK4_RESULTS.md), and
+[`docs/WEEK5_RESULTS.md`](docs/WEEK5_RESULTS.md) for real numbers and
+transcripts. This was the last feature milestone (spec §15 scope armor:
+from here forward, bugfixes only — new ideas go to
+[`docs/ROADMAP.md`](docs/ROADMAP.md), not to code). A drafted blog post is
+at [`docs/BLOG_DRAFT.md`](docs/BLOG_DRAFT.md) (publishing it, making this
+repo public, and a CV link are owner actions, not shipped by this commit).
+The differentiator is a public, reproducible **eval harness** with real
+retrieval numbers (recall@k, MRR, citation precision, faithfulness) that
+gates every change in CI — including the honest first baseline, browsable
+end-to-end on the `/evals` page.
 
 ## License
 
