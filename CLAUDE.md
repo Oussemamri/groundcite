@@ -37,3 +37,11 @@
     snapshotted into every eval run.
 13. Never create or modify files under evals/suites/ unless explicitly
     instructed in the current task. That directory is human-owned (P2).
+14. This file holds durable RULES, not project STATE. Before starting any
+    task, check `docs/` for the newest `WEEK*_RESULTS.md` (what has actually
+    shipped, with evidence) and `WEEK*_INSTRUCTIONS.md` (the active plan, if
+    one exists) — don't assume the state described in an old chat or an old
+    results doc still holds; `git log` and the results docs are authoritative.
+    `core/`, `apps/api/`, and `apps/web/` each have their own `CLAUDE.md` with
+    that directory's exact gate commands and known gotchas — read it before
+    working inside that directory, don't rediscover them.
