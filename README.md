@@ -90,17 +90,83 @@ from official sources; `documents.license_note` is mandatory on every ingested
 standard. Default demo corpus is **14 CFR Part 25** (US public domain) plus
 released NASA standards. See spec §13.
 
+## Benchmarks (spec §8)
+
+Real numbers, straight from [`evals/baseline.json`](evals/baseline.json) (sha
+`19de5cd`, τ_retrieval=0.70, `openai/gpt-oss-120b`) — including the
+`negative` suite's structural 0.0 recall, not hidden. `/evals` in the running
+app renders these same numbers, browsable per-run and per-case.
+
+**Retrieval** (recall@k, MRR — model-independent, unaffected by generation or
+τ tuning; identical across every git_sha this project has recorded):
+
+| suite | cases | recall@5 | recall@10 | MRR |
+|---|---|---|---|---|
+| core | 40 | 0.863 | 0.902 | 0.850 |
+| german | 10 | 0.917 | 0.958 | 0.938 |
+| negative | 10 | 0.0 | 0.0 | 0.0 |
+
+`negative`'s 0.0 is structural, not a failure: every case in that suite is
+`must_abstain` with no `expected_clauses`, so there is nothing for recall to
+be computed over (`mean([]) == 0.0`) — the suite scores abstention
+correctness instead (below), not retrieval.
+
+**Full pipeline** — the honest before/after, including the embarrassing
+first number (spec §8: "the blog post narrative is the *improvement*, which
+requires committing the bad baseline"). "First baseline" is τ_retrieval=0.35
+(the spec default before tuning), sha `695d229`,
+[`docs/WEEK3_RESULTS.md`](docs/WEEK3_RESULTS.md) Phase 6. "Current" is
+τ_retrieval=0.70, sha `19de5cd`, `evals/baseline.json`:
+
+| suite | abstention acc. (τ=0.35) | abstention acc. (τ=0.70) | citation precision (τ=0.35) | citation precision (τ=0.70) |
+|---|---|---|---|---|
+| core | 0.975 | 0.900 | 0.846 | 0.885 |
+| german | 0.900 | 0.800 | 0.952 | 1.000 |
+| negative | 1.000 | 1.000 | — (nothing grounded) | — (nothing grounded) |
+| **all 60** | **0.967 (58/60)** | **0.900 (54/60)** | **0.862** | **0.901** |
+
+Recall@5 did **not** move — it's flat at 0.863/0.917 across the whole
+tracked history, because τ tuning and the model swap both live entirely
+downstream of retrieval; ranking never changed. That's the right number to
+report as stable, not a bigger one manufactured for a better-looking table.
+
+**The real improvement is Gate A's leak rate on must-abstain questions**, not
+end-to-end abstention accuracy (which reads worse at τ=0.70 by design — see
+below). Sweeping candidate τ values against every case's actual recorded
+retrieval score:
+
+| τ | must-abstain leak (Gate A alone, before any LLM self-check) |
+|---|---|
+| 0.35 (spec default) | **25.0%** (3/12) |
+| 0.70 (current) | **0.0%** (0/12) — first zero-leak τ |
+
+At τ=0.35, three real must-abstain questions score above threshold on raw
+retrieval alone and only avoid a hallucinated answer because the LLM itself
+flags `insufficient: true` — a real safety net, but one resting on generation-time
+self-honesty rather than the retrieval gate spec §7 designs to catch it. At
+τ=0.70, Gate A catches all of them on retrieval score alone, before any LLM
+call. The **cost** of that: overall abstention accuracy on already-answerable
+questions falls from 0.967 to 0.900 (6 more grounded-eligible cases now
+wrongly abstain) — a real, stated trade, not hidden. Full detail:
+[`docs/WEEK3_RESULTS.md`](docs/WEEK3_RESULTS.md) Phase 6.
+
+`faithfulness` (LLM-judge, Ragas) is not measured in either baseline — no
+second provider key configured — and `/evals` shows this honestly as
+unmeasured rather than hiding the column.
+
 ## Roadmap
 
 Ingestion, hybrid retrieval, the eval harness, generation + abstention gates,
 and the `/ask` + `/library` + `/documents/[slug]` web UI shipped across Weeks
 0–4 (spec §15) — see [`docs/WEEK3_RESULTS.md`](docs/WEEK3_RESULTS.md) and
 [`docs/WEEK4_RESULTS.md`](docs/WEEK4_RESULTS.md) for real numbers and
-transcripts. Week 5 adds the `/evals` page, README/demo polish, and closes
-the residuals both results docs flag. The differentiator is a public,
-reproducible **eval harness** with real retrieval numbers (recall@k, MRR,
-citation precision, faithfulness) that gates every change in CI — including the
-honest first baseline.
+transcripts. Week 5 (planned: [`docs/WEEK5_INSTRUCTIONS.md`](docs/WEEK5_INSTRUCTIONS.md),
+not yet executed) adds the `/evals` page, abstention polish, a README
+benchmark table, and a blog draft — the last feature milestone (spec §15
+scope armor: after Week 5, bugfixes + the blog post only). The differentiator
+is a public, reproducible **eval harness** with real retrieval numbers
+(recall@k, MRR, citation precision, faithfulness) that gates every change in
+CI — including the honest first baseline.
 
 ## License
 
