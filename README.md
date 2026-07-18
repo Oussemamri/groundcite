@@ -12,13 +12,15 @@ worse than no answer.
 
 **Status:** Weeks 0–5 done (spec §15) — the full milestone list: ingestion,
 hybrid retrieval, the eval harness, generation + abstention gates, an
-end-to-end browser demo (`/ask`, `/library`, `/documents/[slug]`, `/evals`)
-against a live corpus, and the honest benchmark numbers below. This is the
-last feature milestone — see [`docs/ROADMAP.md`](docs/ROADMAP.md) for scope
-armor going forward (bugfixes only from here). See
-[`GROUNDCITE_PROJECT_SPEC.md`](GROUNDCITE_PROJECT_SPEC.md) — the single source of
-truth — and [`CLAUDE.md`](CLAUDE.md) for the coding conventions that gate every
-change.
+end-to-end browser demo (`/library`, `/documents/[slug]`, `/evals`) against
+a live corpus, and the honest benchmark numbers below. Week 6 (owner-
+authorized, spec §15's scope armor reopened for this one feature — see
+`docs/ROADMAP.md`) redesigned `/ask` into a multi-turn chat experience
+against an owner-supplied design, with real conversation persistence (each
+turn still runs its own fully independent pipeline — spec §3.2 unchanged).
+See [`GROUNDCITE_PROJECT_SPEC.md`](GROUNDCITE_PROJECT_SPEC.md) — the single
+source of truth — and [`CLAUDE.md`](CLAUDE.md) for the coding conventions
+that gate every change.
 
 ## Non-goals for v1 (scope armor)
 
@@ -163,20 +165,31 @@ unmeasured rather than hiding the column.
 ## Roadmap
 
 Ingestion, hybrid retrieval, the eval harness, generation + abstention
-gates, the `/ask` + `/library` + `/documents/[slug]` web UI, the `/evals`
-page, abstention polish, and this README's benchmark table shipped across
-Weeks 0–5 (spec §15) — see [`docs/WEEK3_RESULTS.md`](docs/WEEK3_RESULTS.md),
+gates, the `/library` + `/documents/[slug]` web UI, the `/evals` page,
+abstention polish, and this README's benchmark table shipped across Weeks
+0–5 (spec §15) — see [`docs/WEEK3_RESULTS.md`](docs/WEEK3_RESULTS.md),
 [`docs/WEEK4_RESULTS.md`](docs/WEEK4_RESULTS.md), and
 [`docs/WEEK5_RESULTS.md`](docs/WEEK5_RESULTS.md) for real numbers and
-transcripts. This was the last feature milestone (spec §15 scope armor:
-from here forward, bugfixes only — new ideas go to
-[`docs/ROADMAP.md`](docs/ROADMAP.md), not to code). A drafted blog post is
-at [`docs/BLOG_DRAFT.md`](docs/BLOG_DRAFT.md) (publishing it, making this
-repo public, and a CV link are owner actions, not shipped by this commit).
-The differentiator is a public, reproducible **eval harness** with real
-retrieval numbers (recall@k, MRR, citation precision, faithfulness) that
-gates every change in CI — including the honest first baseline, browsable
-end-to-end on the `/evals` page.
+transcripts. That was the last SPEC-defined feature milestone (spec §15
+scope armor: from here forward, bugfixes only unless explicitly reopened by
+the owner — new ideas go to [`docs/ROADMAP.md`](docs/ROADMAP.md), not to
+code).
+
+**Week 6** ([`docs/WEEK6_RESULTS.md`](docs/WEEK6_RESULTS.md)) is exactly
+that kind of owner-authorized exception: `/ask` was redesigned into a
+multi-turn chat experience against an owner-supplied design handoff, with
+real conversation persistence — verified live against a real 3-turn
+conversation (two grounded turns, one real must-abstain question), a cold
+reload replaying the full history from Postgres, and a mobile viewport.
+Every turn still runs its own fully independent pipeline; nothing in
+retrieval, generation, gates, or prompts changed.
+
+A drafted blog post is at [`docs/BLOG_DRAFT.md`](docs/BLOG_DRAFT.md)
+(publishing it, making this repo public, and a CV link are owner actions,
+not shipped by any commit). The differentiator is a public, reproducible
+**eval harness** with real retrieval numbers (recall@k, MRR, citation
+precision, faithfulness) that gates every change in CI — including the
+honest first baseline, browsable end-to-end on the `/evals` page.
 
 ## License
 

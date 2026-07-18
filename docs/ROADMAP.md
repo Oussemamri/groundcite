@@ -1,24 +1,60 @@
 # Roadmap
 
-## Scope armor (spec §15, binding after Week 5)
+## Scope armor (spec §15, binding after Week 5 — Week 6 was a named, owner-authorized exception)
 
 Weeks 0–5 shipped the full milestone list in `GROUNDCITE_PROJECT_SPEC.md`
 §15: prep, ingestion, hybrid retrieval + the retrieval-only eval half,
 generation + Gates A/B + the first full-pipeline baseline, the FastAPI + SSE
-API and the `/ask`/`/library`/`/documents/[slug]` web app, and — this week —
-the `/evals` page, abstention polish, an honest README benchmark table, a
-demo capture, and a blog draft. That is the last feature milestone.
+API and the `/ask`/`/library`/`/documents/[slug]` web app, and the `/evals`
+page, abstention polish, an honest README benchmark table, a demo capture,
+and a blog draft. That was the last SPEC-defined feature milestone.
 
-**From here forward: bugfixes only. New ideas go here, not into code.**
-This file is where they land instead — read it before proposing a new
-feature branch. Landing a new idea in code without it passing through here
-first is itself a rule-7/rule-0 violation (scope creep), not just a process
-nitpick.
+**Week 6** (`docs/WEEK6_INSTRUCTIONS.md`/`docs/WEEK6_RESULTS.md`) reopened
+this deliberately: the owner supplied a high-fidelity design handoff
+redesigning `/ask` into a multi-turn chat experience, confirmed explicitly
+before any code was written (full redesign incl. conversation persistence,
+not a visual-only restyle) rather than silently expanding scope. It shipped
+without touching `core/groundcite/services/ask.py`'s retrieval, generation,
+gates, or prompts — spec §3.2's "one ask = one pipeline run" non-goal held
+throughout; conversations only group already-independent Asks.
+
+**From here forward (again): bugfixes only, unless another owner-supplied
+design/feature request explicitly reopens scope the way Week 6 did.** New
+ideas go here, not into code. This file is where they land instead — read
+it before proposing a new feature branch. Landing a new idea in code
+without it passing through here first (or an explicit owner go-ahead like
+Week 6's) is itself a rule-7/rule-0 violation (scope creep), not just a
+process nitpick.
 
 ## Ideas parked here (not started, not scheduled)
 
-Carried over from residuals flagged in `docs/WEEK4_RESULTS.md` and
-`docs/WEEK5_RESULTS.md` — real, named, deliberately not built speculatively:
+Carried over from residuals flagged in `docs/WEEK4_RESULTS.md`,
+`docs/WEEK5_RESULTS.md`, and `docs/WEEK6_RESULTS.md` — real, named,
+deliberately not built speculatively:
+
+- **Inline `[n]` citation markers in the /ask answer prose** (Week 6 AD-8)
+  — the generator's `answer_md` contract has never asked the LLM for inline
+  markers (confirmed in `core/groundcite/services/prompts/answerer.py`);
+  citations are a separate structured list. Building this needs a prompt
+  change — its own rule-4-gated, eval-verified effort, not bundled into a
+  redesign. (Also a pre-existing gap vs. spec §3.1 goal 3's literal
+  wording, "inline citations `[...]`" — not newly introduced this week.)
+- **A mobile (<1360px) citation sheet/popover for `/ask`** (Week 6 AD-8) —
+  the design handoff's own README says this wasn't built in the mock
+  either; the citations panel just hides below that width today.
+- **Conversation rename/delete** (Week 6) — not in the design handoff's
+  interaction list.
+- **LLM-summarized conversation titles** (Week 6 AD-3) — titles are
+  currently the literal opening question, truncated to ~80 chars. A real
+  separate feature (a second LLM call, cost, a prompt to design and
+  verify), not built speculatively.
+- **A replayed abstained turn's closest passages are unrecoverable**
+  (Week 6) — `Abstention.top_passages` is an SSE-only payload, never
+  persisted to the `asks` table, so `/ask/[conversationId]` genuinely
+  cannot show them for a reloaded past turn (confidence/threshold/latency
+  still populate correctly, since those fields ARE persisted). Would need
+  a real schema change (persist `top_passages` alongside `pipeline_debug`
+  or in a new column) to close.
 
 - **`Citation.document_slug`** — a real cross-layer field (core domain → API
   model → TS type) so citation→reader links stay correct once the library
