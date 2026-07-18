@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+body { margin: 0; background: #0B0E14; color: #E6EAF2; font-family: Inter, ui-sans-serif, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+a { color: #4CC3FF; text-decoration: none; }
+a:hover { color: #4CC3FF; }
+@keyframes gc-pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+</style>
+</helmet>
+<div style="min-height:100vh;background:#0B0E14;color:#E6EAF2" data-screen-label="Ask (current)">
+  <header style="position:sticky;top:0;z-index:10;border-bottom:1px solid #232B3A;background:rgba(19,24,34,0.95);backdrop-filter:blur(8px)">
+    <div style="max-width:1152px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;padding:12px 24px">
+      <a href="#" style="display:flex;align-items:center;gap:8px">
+        <span style="width:8px;height:8px;border-radius:9999px;background:#2FBF71"></span>
+        <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:14px;font-weight:500;letter-spacing:0.2em;color:#E6EAF2">GROUNDCITE</span>
+      </a>
+      <nav style="display:flex;gap:24px;font-size:14px">
+        <a href="#" style="border-bottom:2px solid #4CC3FF;padding-bottom:12px;margin-bottom:-12px;color:#4CC3FF">Ask</a>
+        <a href="#" style="border-bottom:2px solid transparent;padding-bottom:12px;margin-bottom:-12px;color:rgba(230,234,242,0.6)" style-hover="color:#E6EAF2">Library</a>
+        <a href="#" style="border-bottom:2px solid transparent;padding-bottom:12px;margin-bottom:-12px;color:rgba(230,234,242,0.6)" style-hover="color:#E6EAF2">Evals</a>
+      </nav>
+    </div>
+  </header>
+  <main style="max-width:1152px;margin:0 auto;display:grid;grid-template-columns:1fr 360px;gap:24px;padding:40px 24px">
+    <section aria-label="Ask">
+      <h1 style="font-size:20px;font-weight:600;margin:0">Ask</h1>
+      <p style="margin:8px 0 0;color:rgba(230,234,242,0.6);font-size:16px">Ask a question about an ingested standard. Every answer carries verifiable clause citations — or the system abstains.</p>
+      <form style="margin-top:24px;display:flex;gap:8px">
+        <input type="text" value="What does §25.1309(b) require for catastrophic failure conditions?" readonly style="flex:1;border-radius:4px;border:1px solid #232B3A;background:#131822;padding:10px 16px;font-size:14px;font-family:inherit;color:#E6EAF2;outline:none" />
+        <button type="button" style="border-radius:4px;border:1px solid #4CC3FF;background:transparent;padding:10px 16px;font-size:14px;font-family:inherit;color:#4CC3FF;cursor:pointer" style-hover="background:rgba(76,195,255,0.1)">Ask</button>
+      </form>
+      <div style="margin-top:24px">
+        <div role="status" style="display:flex;align-items:center;gap:4px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:rgba(230,234,242,0.5)">
+          <span style="display:flex;align-items:center;gap:4px"><span style="width:6px;height:6px;border-radius:9999px;background:#4CC3FF"></span><span style="color:rgba(230,234,242,0.8)">retrieving</span></span>
+          <span style="display:flex;align-items:center;gap:4px"><span style="margin:0 4px;color:#232B3A">/</span><span style="width:6px;height:6px;border-radius:9999px;background:#4CC3FF"></span><span style="color:rgba(230,234,242,0.8)">reranking</span></span>
+          <span style="display:flex;align-items:center;gap:4px"><span style="margin:0 4px;color:#232B3A">/</span><span style="width:6px;height:6px;border-radius:9999px;background:#4CC3FF"></span><span style="color:rgba(230,234,242,0.8)">generating</span></span>
+        </div>
+        <div style="margin-top:16px;border-radius:8px;border:1px solid #232B3A;background:#131822;padding:20px">
+          <div style="margin-bottom:12px">
+            <span style="display:inline-flex;align-items:center;gap:8px;border-radius:9999px;border:1px solid rgba(47,191,113,0.4);background:rgba(47,191,113,0.1);color:#2FBF71;padding:4px 12px;font-size:12px;font-weight:500;letter-spacing:0.025em">
+              <span style="width:6px;height:6px;border-radius:9999px;background:currentColor"></span>
+              GROUNDED
+              <span style="font-family:'JetBrains Mono',ui-monospace,monospace;opacity:0.8">0.8412</span>
+            </span>
+          </div>
+          <div style="font-size:14px;line-height:1.625;color:#E6EAF2">
+            <p style="margin:0">Under <strong>§25.1309(b)</strong>, airplane systems and associated components, considered separately and in relation to other systems, must be designed so that the occurrence of any failure condition which would prevent the continued safe flight and landing of the airplane is <strong>extremely improbable</strong>.</p>
+            <p style="margin:12px 0 0">The regulation further requires that the occurrence of any other failure condition which would reduce the capability of the airplane or the ability of the crew to cope with adverse operating conditions is <strong>improbable</strong>.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+    <aside aria-label="Citations" style="border-radius:8px;border:1px solid #232B3A;background:#131822;padding:16px;align-self:start">
+      <h2 style="margin:0;font-size:12px;font-weight:500;text-transform:uppercase;letter-spacing:0.1em;color:rgba(230,234,242,0.5)">Citations</h2>
+      <div style="margin-top:12px;display:flex;flex-direction:column;gap:8px">
+        <a href="#" style="display:block;border-radius:4px;border:1px solid #232B3A;background:#131822;padding:12px;color:inherit" style-hover="border-color:rgba(76,195,255,0.5)">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+            <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;color:#E6EAF2">§25.1309(b)(1)</span>
+            <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;color:rgba(230,234,242,0.5)">0.8412</span>
+          </div>
+          <p style="margin:6px 0 0;font-size:12px;color:rgba(230,234,242,0.6);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">The airplane systems and associated components, considered separately and in relation to other systems, must be designed so that the occurrence of any failure condition which would prevent the continued safe flight and landing of the airplane is extremely improbable...</p>
+        </a>
+        <a href="#" style="display:block;border-radius:4px;border:1px solid #232B3A;background:#131822;padding:12px;color:inherit" style-hover="border-color:rgba(76,195,255,0.5)">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+            <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;color:#E6EAF2">§25.1309(b)(2)</span>
+            <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;color:rgba(230,234,242,0.5)">0.7893</span>
+          </div>
+          <p style="margin:6px 0 0;font-size:12px;color:rgba(230,234,242,0.6);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">The occurrence of any other failure condition which would reduce the capability of the airplane or the ability of the crew to cope with adverse operating conditions is improbable.</p>
+        </a>
+        <a href="#" style="display:block;border-radius:4px;border:1px solid #232B3A;background:#131822;padding:12px;color:inherit" style-hover="border-color:rgba(76,195,255,0.5)">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+            <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;color:#E6EAF2">§25.1309(a)</span>
+            <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;color:rgba(230,234,242,0.5)">0.7241</span>
+          </div>
+          <p style="margin:6px 0 0;font-size:12px;color:rgba(230,234,242,0.6);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">The equipment, systems, and installations whose functioning is required by this subchapter, must be designed to ensure that they perform their intended functions under any foreseeable operating condition.</p>
+        </a>
+      </div>
+    </aside>
+  </main>
+</div>
+</x-dc>
+</body>
+</html>

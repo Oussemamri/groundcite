@@ -38,6 +38,28 @@
 - Fonts: Inter (UI), **JetBrains Mono for every clause ID, standard code, and score** — monospace clause IDs are a signature detail.
 - UI copy tone: calm, aviation-flavored, never cute in errors. Abstention card title: "No grounded answer" (subtitle: "Confidence below threshold — closest passages shown below."). Do not joke in abstentions.
 - Every answer shows a status chip: `GROUNDED` (green) or `ABSTAINED` (amber) + retrieval confidence.
+- Applies to `/library`, `/evals`, `/documents/[slug]`. `/ask` uses a distinct theme — see §2.2.1.
+
+### 2.2.1 `/ask` chat theme (Week 6, deliberate pivot — one page only)
+`/ask` was redesigned from a one-shot Q&A page into a multi-turn chat
+experience against an owner-supplied high-fidelity design handoff
+(`design_handoff_chat_redesign/`). The theme below applies **only to `/ask`**
+— every other page keeps §2.2's dark "mission control" theme unchanged. This
+is a deliberate, owner-directed choice for this one page, not a site-wide
+rebrand: the honesty signals (per-turn pipeline status, GROUNDED/ABSTAINED
+chips, retrieval confidence, abstention copy) carry over unchanged, just
+recolored.
+- Warm "paper" palette: page background `#F0EEE6`, panel background `#E9E6DC`,
+  card background `#FDFCF8`, ink `#2B2A24`.
+- Accent `#C15F3C` (hover `#A94F32`) for links, the primary button, and active
+  sidebar state; **grounded** `#1C7A4D`, **abstained** `#A16207` (still amber-
+  family, never red — §2.2's abstention-is-not-an-error rule is unchanged).
+- Fonts: **Source Serif 4** for all prose (questions, answers, headings) —
+  new for this page only — **JetBrains Mono still carries every clause ID,
+  standard code, and score**, same signature-detail rule as §2.2.
+- Layout: full-viewport 3-column shell (collapsible conversation-history
+  sidebar, chat thread + composer, citations panel) instead of the shared
+  top `Nav` + single-column layout every other page uses.
 
 ### 2.3 Naming conventions
 - Repo/package: `groundcite`. Python package `groundcite`, CLI `groundcite`, Docker images `groundcite-api`, `groundcite-web`.
@@ -179,17 +201,29 @@ CREATE INDEX chunks_embedding_idx ON chunks USING hnsw (embedding vector_cosine_
 CREATE INDEX chunks_tsv_idx       ON chunks USING gin (tsv);
 CREATE INDEX chunks_clause_idx    ON chunks (document_id, clause_path);
 
-CREATE TABLE asks (
-  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  question       text NOT NULL,
-  status         text NOT NULL,                -- 'grounded' | 'abstained' | 'error'
-  answer_md      text,
-  confidence     real,
-  latency_ms     int,
-  cost_usd       numeric(8,5),
-  pipeline_debug jsonb NOT NULL,               -- per-stage timings, candidates, scores
-  created_at     timestamptz DEFAULT now()
+-- Week 6: conversations group already-independent Asks for the /ask chat UI
+-- (§10). Never a new generation capability -- §3.2's "one ask = one pipeline
+-- run" non-goal is unchanged; no prior-turn context is ever passed to the
+-- LLM. A conversation is a titled container over Ask rows, nothing more.
+CREATE TABLE conversations (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  title      text NOT NULL,
+  created_at timestamptz DEFAULT now()
 );
+
+CREATE TABLE asks (
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  conversation_id uuid REFERENCES conversations ON DELETE CASCADE,  -- nullable; asks made outside a conversation stay valid
+  question        text NOT NULL,
+  status          text NOT NULL,                -- 'grounded' | 'abstained' | 'error'
+  answer_md       text,
+  confidence      real,
+  latency_ms      int,
+  cost_usd        numeric(8,5),
+  pipeline_debug  jsonb NOT NULL,               -- per-stage timings, candidates, scores
+  created_at      timestamptz DEFAULT now()
+);
+CREATE INDEX asks_conversation_idx ON asks (conversation_id, created_at);
 
 CREATE TABLE citations (
   ask_id   uuid REFERENCES asks ON DELETE CASCADE,
@@ -354,8 +388,10 @@ citation is worse than no answer" contract justifies the trade.
 
 | Method & path | Purpose |
 |---|---|
-| `POST /asks` | body `{question, document_slugs?}` → SSE stream (§7 events) |
+| `POST /asks` | body `{question, document_slugs?, conversation_id?}` → SSE stream (§7 events). Omitted `conversation_id` auto-creates a new conversation (Week 6, §10). |
 | `GET /asks/{id}` | replay a past ask (answer + citations + debug) |
+| `GET /conversations` | list conversations, newest first (Week 6) — id, title, turn count, latest turn's status |
+| `GET /conversations/{id}` | one conversation's full turn history (each turn = answer + citations + debug, same shape as `GET /asks/{id}`) |
 | `POST /documents` | multipart PDF + metadata → `{job_id}` (BackgroundTask in v1) |
 | `GET /documents` / `GET /documents/{slug}` | library + clause tree |
 | `GET /chunks/{id}` | citation resolution target |
@@ -368,7 +404,14 @@ Rules: routes are thin (parse → service → serialize); pydantic response mode
 
 ## 10. Web app (Next.js 15, App Router, TS strict, TanStack Query, Tailwind)
 
-- `/ask` — input + streaming answer; **right panel: citation cards** (clause_path mono, snippet, score); clicking a citation opens the reader anchored & highlighted. Status chip GROUNDED/ABSTAINED per §2.2.
+- `/ask` — a multi-turn chat experience (Week 6, §2.2.1 theme), not a single
+  Q&A form: left sidebar of past conversations (collapsible), a scrollable
+  turn thread (each turn still its own independent pipeline run — §3.2), a
+  fixed composer, and a **right panel: citation cards** (clause_path mono,
+  snippet, score) for the latest turn — clicking a citation opens the reader
+  anchored & highlighted, same as before. Every turn shows its own status
+  chip GROUNDED/ABSTAINED + retrieval confidence and pipeline-stage row
+  (§2.2.1's honesty signals, unchanged from the original one-shot design).
 - `/library` — documents table (org, code, version, chunks, license_note) + upload with ingestion progress.
 - `/documents/[slug]` — reader: left clause tree, right content, `?chunk=` deep-link highlights.
 - `/evals` — runs table + per-suite metric trend (recharts) + per-case drill-down showing retrieved-vs-expected clauses. **This page is the screenshot for the blog post.**
