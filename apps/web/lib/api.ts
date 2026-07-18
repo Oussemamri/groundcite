@@ -65,6 +65,24 @@ export interface AskOut {
   citations: CitationOut[];
 }
 
+/** A conversation summary (Week 6, spec §9 GET /conversations). Groups
+ * already-independent Asks -- turn_count/latest_status are read-only,
+ * derived at read time (never re-computed generation state). */
+export interface ConversationOut {
+  id: string;
+  title: string;
+  created_at: string | null;
+  turn_count: number | null;
+  latest_status: string | null;
+}
+
+/** One conversation's full turn history (spec §9 GET /conversations/{id})
+ * -- each turn the same shape GET /asks/{id} already returns. */
+export interface ConversationDetailOut {
+  conversation: ConversationOut;
+  asks: AskOut[];
+}
+
 export interface EvalRunOut {
   id: string;
   git_sha: string;
@@ -131,6 +149,20 @@ export interface JobOut {
   created_at: string;
 }
 
+/** GET /healthz (spec §9/§12). `config` carries the live tau_retrieval /
+ * groq_model / llm_provider / reranker_enabled -- Week 6's chat composer
+ * and run-detail panel show the real running threshold, not a guess. */
+export interface HealthOut {
+  status: string;
+  checks: Record<string, string>;
+  config: {
+    tau_retrieval?: number;
+    groq_model?: string;
+    llm_provider?: string;
+    reranker_enabled?: boolean;
+  };
+}
+
 /** RFC-7807 problem+json (AD-6) -- every non-2xx response has this shape. */
 export interface Problem {
   type: string;
@@ -168,6 +200,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  healthz: () => request<HealthOut>("/healthz"),
+
   listDocuments: () => request<DocumentOut[]>("/api/v1/documents"),
 
   getDocument: (slug: string, includeChunks = false) =>
@@ -178,6 +212,13 @@ export const api = {
   getChunk: (chunkId: string) => request<ChunkOut>(`/api/v1/chunks/${encodeURIComponent(chunkId)}`),
 
   getAsk: (askId: string) => request<AskOut>(`/api/v1/asks/${encodeURIComponent(askId)}`),
+
+  listConversations: () => request<ConversationOut[]>("/api/v1/conversations"),
+
+  getConversation: (conversationId: string) =>
+    request<ConversationDetailOut>(
+      `/api/v1/conversations/${encodeURIComponent(conversationId)}`,
+    ),
 
   listEvalRuns: () => request<EvalRunOut[]>("/api/v1/eval/runs"),
 

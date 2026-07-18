@@ -65,6 +65,10 @@ export interface FinalGrounded {
   usage: UsageData;
   ask_id: string;
   latency_ms: number;
+  // Week 6: the Conversation this turn was saved under (auto-created by the
+  // server when the request carried none). Never a memory/context field --
+  // it only tags where the Ask row was persisted (spec §3.2 unchanged).
+  conversation_id: string | null;
 }
 
 export interface FinalAbstained {
@@ -73,6 +77,7 @@ export interface FinalAbstained {
   usage: UsageData;
   ask_id: string;
   latency_ms: number;
+  conversation_id: string | null;
 }
 
 export type FinalEventData = FinalGrounded | FinalAbstained;
@@ -161,58 +166,65 @@ export function useAskStream() {
   const [state, setState] = useState<AskStreamState>(initialState);
   const abortRef = useRef<AbortController | null>(null);
 
-  const start = useCallback((question: string, documentSlugs?: string[]) => {
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-    setState({ ...initialState, status: "streaming" });
+  const start = useCallback(
+    (question: string, conversationId?: string, documentSlugs?: string[]) => {
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+      setState({ ...initialState, status: "streaming" });
 
-    void (async () => {
-      try {
-        const res = await fetch("/api/v1/asks", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ question, document_slugs: documentSlugs ?? null }),
-          signal: controller.signal,
-        });
-        if (!res.ok) {
-          setState((s) => ({ ...s, status: "error", errorMessage: `HTTP ${res.status}` }));
-          return;
-        }
-        for await (const event of readAskStream(res)) {
-          if (event.type === "stage") {
-            const data = event.data as unknown as StageEventData;
-            setState((s) => ({ ...s, stage: data.stage }));
-          } else if (event.type === "token") {
-            const data = event.data as unknown as TokenEventData;
-            setState((s) => ({ ...s, answerMd: s.answerMd + data.token }));
-          } else if (event.type === "citations") {
-            const data = event.data as unknown as CitationsEventData;
-            setState((s) => ({ ...s, citations: data.citations, answerMd: data.answer_md }));
-          } else if (event.type === "final") {
-            const data = event.data as unknown as FinalEventData;
-            setState((s) => ({
-              ...s,
-              status: data.status,
-              final: data,
-              citations: data.status === "grounded" ? data.answer.citations : s.citations,
-              answerMd: data.status === "grounded" ? data.answer.answer_md : s.answerMd,
-            }));
-          } else if (event.type === "error") {
-            const data = event.data as unknown as ErrorEventData;
-            setState((s) => ({ ...s, status: "error", errorMessage: data.message }));
+      void (async () => {
+        try {
+          const res = await fetch("/api/v1/asks", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              question,
+              document_slugs: documentSlugs ?? null,
+              conversation_id: conversationId ?? null,
+            }),
+            signal: controller.signal,
+          });
+          if (!res.ok) {
+            setState((s) => ({ ...s, status: "error", errorMessage: `HTTP ${res.status}` }));
+            return;
           }
+          for await (const event of readAskStream(res)) {
+            if (event.type === "stage") {
+              const data = event.data as unknown as StageEventData;
+              setState((s) => ({ ...s, stage: data.stage }));
+            } else if (event.type === "token") {
+              const data = event.data as unknown as TokenEventData;
+              setState((s) => ({ ...s, answerMd: s.answerMd + data.token }));
+            } else if (event.type === "citations") {
+              const data = event.data as unknown as CitationsEventData;
+              setState((s) => ({ ...s, citations: data.citations, answerMd: data.answer_md }));
+            } else if (event.type === "final") {
+              const data = event.data as unknown as FinalEventData;
+              setState((s) => ({
+                ...s,
+                status: data.status,
+                final: data,
+                citations: data.status === "grounded" ? data.answer.citations : s.citations,
+                answerMd: data.status === "grounded" ? data.answer.answer_md : s.answerMd,
+              }));
+            } else if (event.type === "error") {
+              const data = event.data as unknown as ErrorEventData;
+              setState((s) => ({ ...s, status: "error", errorMessage: data.message }));
+            }
+          }
+        } catch (err) {
+          if (controller.signal.aborted) return; // a fresh start() superseded this one
+          setState((s) => ({
+            ...s,
+            status: "error",
+            errorMessage: err instanceof Error ? err.message : String(err),
+          }));
         }
-      } catch (err) {
-        if (controller.signal.aborted) return; // a fresh start() superseded this one
-        setState((s) => ({
-          ...s,
-          status: "error",
-          errorMessage: err instanceof Error ? err.message : String(err),
-        }));
-      }
-    })();
-  }, []);
+      })();
+    },
+    [],
+  );
 
   return { ...state, start };
 }

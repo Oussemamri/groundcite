@@ -12,6 +12,15 @@ const nextConfig = {
         source: "/api/v1/:path*",
         destination: `${apiOrigin}/api/v1/:path*`,
       },
+      // Week 6: the /ask chat theme's composer + run-detail panel show the
+      // real running τ_retrieval (an honesty signal, not a guess) --
+      // /healthz already exposes it but lives outside /api/v1, so it needs
+      // its own same-origin proxy rule (AD-3's rationale applies equally
+      // here: zero CORS, same production reverse-proxy shape).
+      {
+        source: "/healthz",
+        destination: `${apiOrigin}/healthz`,
+      },
     ];
   },
 };

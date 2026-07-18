@@ -43,6 +43,7 @@ const config: Config = {
           },
           grounded: "#1C7A4D",
           abstained: "#A16207",
+          header: "rgba(250,249,245,0.92)", // sticky chat header, paired with backdrop-blur
         },
       },
       fontFamily: {
