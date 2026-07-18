@@ -16,7 +16,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.jobs import Job
-from groundcite.domain.entities import Ask, Chunk, Document, EvalCase, Section
+from groundcite.domain.entities import Ask, Chunk, Conversation, Document, EvalCase, Section
 from groundcite.domain.results import Citation, EvalResult, EvalRun
 
 
@@ -142,6 +142,36 @@ class AskOut(_Out):
             created_at=ask.created_at,
             citations=[CitationOut.from_domain(c) for c in citations],
         )
+
+
+class ConversationOut(_Out):
+    """A conversation summary (Week 6, spec §9 GET /conversations). Groups
+    already-independent Asks -- turn_count/latest_status are read-only,
+    derived at read time (never re-computed generation state)."""
+
+    id: UUID
+    title: str
+    created_at: datetime | None = None
+    turn_count: int | None = None
+    latest_status: str | None = None
+
+    @classmethod
+    def from_domain(cls, c: Conversation) -> ConversationOut:
+        return cls(
+            id=c.id,
+            title=c.title,
+            created_at=c.created_at,
+            turn_count=c.turn_count,
+            latest_status=c.latest_status.value if c.latest_status is not None else None,
+        )
+
+
+class ConversationDetailOut(_Out):
+    """One conversation's full turn history (spec §9 GET /conversations/{id})
+    -- each turn the same shape GET /asks/{id} already returns."""
+
+    conversation: ConversationOut
+    asks: list[AskOut]
 
 
 class EvalRunOut(_Out):

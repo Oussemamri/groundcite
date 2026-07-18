@@ -106,7 +106,9 @@ def test_document_slugs_are_passed_through(make_client, stub_services) -> None: 
     seen: dict[str, object] = {}
 
     def _capturing_ask(
-        question: str, document_slugs: list[str] | None = None
+        question: str,
+        document_slugs: list[str] | None = None,
+        conversation_id: object | None = None,
     ) -> Iterator[AskEvent]:
         seen["question"] = question
         seen["document_slugs"] = document_slugs
@@ -117,3 +119,67 @@ def test_document_slugs_are_passed_through(make_client, stub_services) -> None: 
         "/api/v1/asks", json={"question": "q?", "document_slugs": ["far-25"]}
     )
     assert seen == {"question": "q?", "document_slugs": ["far-25"]}
+
+
+# --- Week 6: conversation_id --------------------------------------------------
+
+
+def test_conversation_id_auto_created_when_absent(make_client, stub_services) -> None:  # type: ignore[no-untyped-def]
+    seen: dict[str, object] = {}
+
+    def _capturing_ask(
+        question: str,
+        document_slugs: list[str] | None = None,
+        conversation_id: object | None = None,
+    ) -> Iterator[AskEvent]:
+        seen["conversation_id"] = conversation_id
+        yield AskEvent(type=AskEventType.FINAL, data={"status": "abstained"})
+
+    stub_services.ask.ask = _capturing_ask
+    r = make_client(stub_services).post("/api/v1/asks", json={"question": "a fresh question"})
+    assert r.status_code == 200
+    assert seen["conversation_id"] is not None
+    # The auto-created conversation is now discoverable via list_conversations.
+    [conv] = stub_services.ask.conversations.values()
+    assert conv.title == "a fresh question"
+    assert seen["conversation_id"] == conv.id
+
+
+def test_conversation_id_truncates_long_titles(make_client, stub_services) -> None:  # type: ignore[no-untyped-def]
+    stub_services.ask.events_factory = _abstained_events
+    long_question = "x" * 200
+    make_client(stub_services).post("/api/v1/asks", json={"question": long_question})
+    [conv] = stub_services.ask.conversations.values()
+    assert len(conv.title) == 80
+    assert conv.title.endswith("…")
+
+
+def test_conversation_id_passed_through_when_provided(make_client, stub_services) -> None:  # type: ignore[no-untyped-def]
+    from uuid import UUID, uuid4
+
+    seen: dict[str, object] = {}
+    existing_id = uuid4()
+
+    def _capturing_ask(
+        question: str,
+        document_slugs: list[str] | None = None,
+        conversation_id: object | None = None,
+    ) -> Iterator[AskEvent]:
+        seen["conversation_id"] = conversation_id
+        yield AskEvent(type=AskEventType.FINAL, data={"status": "abstained"})
+
+    stub_services.ask.ask = _capturing_ask
+    r = make_client(stub_services).post(
+        "/api/v1/asks", json={"question": "q?", "conversation_id": str(existing_id)}
+    )
+    assert r.status_code == 200
+    assert seen["conversation_id"] == existing_id
+    assert isinstance(seen["conversation_id"], UUID)
+    # No new conversation was auto-created -- the given id was used as-is.
+    assert stub_services.ask.conversations == {}
+
+
+def test_malformed_conversation_id_404(client: TestClient) -> None:
+    r = client.post("/api/v1/asks", json={"question": "q?", "conversation_id": "not-a-uuid"})
+    assert r.status_code == 404
+    assert r.headers["content-type"].startswith("application/problem+json")

@@ -11,8 +11,9 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 from typing import Protocol
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi import FastAPI
@@ -39,8 +40,15 @@ class _AskProto(Protocol):
     def get_ask(self, ask_id: UUID) -> object | None: ...
     def get_ask_citations(self, ask_id: UUID) -> list[object]: ...
     def ask(
-        self, question: str, document_slugs: Sequence[str] | None = None
+        self,
+        question: str,
+        document_slugs: Sequence[str] | None = None,
+        conversation_id: UUID | None = None,
     ) -> Iterator[object]: ...
+    def create_conversation(self, title: str) -> object | None: ...
+    def get_conversation(self, conversation_id: UUID) -> object | None: ...
+    def list_conversations(self) -> list[object]: ...
+    def list_conversation_asks(self, conversation_id: UUID) -> list[object]: ...
 
 
 class _EvalsProto(Protocol):
@@ -102,6 +110,10 @@ class StubAsk:
     # Scripted event stream for POST /asks (AD-2); a callable so each request
     # can get a FRESH iterator (a plain list would be exhausted after test 1).
     events_factory: Callable[[], Iterator[object]] | None = None
+    # Week 6: conversations, same shape as core's FakeRepository.
+    conversations: dict[UUID, object] = field(default_factory=dict)
+    conversation_asks: dict[UUID, list[object]] = field(default_factory=dict)
+    next_conversation_id: UUID | None = None
 
     def get_ask(self, ask_id: UUID) -> object | None:
         return self.asks.get(ask_id)
@@ -109,10 +121,32 @@ class StubAsk:
     def get_ask_citations(self, ask_id: UUID) -> list[object]:
         return self.citations.get(ask_id, [])
 
-    def ask(self, question: str, document_slugs: Sequence[str] | None = None) -> Iterator[object]:
+    def ask(
+        self,
+        question: str,
+        document_slugs: Sequence[str] | None = None,
+        conversation_id: UUID | None = None,
+    ) -> Iterator[object]:
         if self.events_factory is None:
             return iter(())
         return self.events_factory()
+
+    def create_conversation(self, title: str) -> object | None:
+        cid = self.next_conversation_id or uuid4()
+        conv = SimpleNamespace(
+            id=cid, title=title, created_at=None, turn_count=0, latest_status=None
+        )
+        self.conversations[cid] = conv
+        return conv
+
+    def get_conversation(self, conversation_id: UUID) -> object | None:
+        return self.conversations.get(conversation_id)
+
+    def list_conversations(self) -> list[object]:
+        return list(self.conversations.values())
+
+    def list_conversation_asks(self, conversation_id: UUID) -> list[object]:
+        return self.conversation_asks.get(conversation_id, [])
 
 
 @dataclass

@@ -154,3 +154,38 @@ def test_live_sse_ask_must_abstain_costs_no_tokens(live_client: TestClient) -> N
     assert events[-1] == "event: final"
     assert '"status": "abstained"' in r.text
     assert '"usage": {"prompt_tokens": 0, "completion_tokens": 0}' in r.text
+
+
+def test_live_conversations_list(live_client: TestClient) -> None:
+    r = live_client.get("/api/v1/conversations")
+    assert r.status_code == 200
+    assert isinstance(r.json(), list)
+
+
+def test_live_ask_auto_creates_a_real_conversation(live_client: TestClient) -> None:
+    """Week 6: a real ask with no conversation_id auto-creates a real
+    conversations row -- confirmed by fetching it back via GET
+    /conversations/{id}. Zero Groq spend (same Gate-A-blocks-first-question
+    pattern as the abstention test above)."""
+    r = live_client.post(
+        "/api/v1/asks",
+        json={
+            "question": "What does ARP4754A say about development assurance levels?",
+            "document_slugs": ["far-25"],
+        },
+    )
+    assert r.status_code == 200
+    body = r.text
+    marker = '"conversation_id": "'
+    start = body.index(marker) + len(marker)
+    conversation_id = body[start : body.index('"', start)]
+    assert conversation_id, "FINAL event must carry a real conversation_id"
+
+    detail = live_client.get(f"/api/v1/conversations/{conversation_id}")
+    assert detail.status_code == 200
+    payload = detail.json()
+    assert payload["conversation"]["id"] == conversation_id
+    assert payload["conversation"]["turn_count"] == 1
+    assert payload["conversation"]["latest_status"] == "abstained"
+    assert len(payload["asks"]) == 1
+    assert payload["asks"][0]["question"].startswith("What does ARP4754A")
