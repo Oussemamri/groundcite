@@ -90,6 +90,29 @@ class Ask(_Frozen):
     cost_usd: Decimal | None = None
     pipeline_debug: dict[str, object] = Field(default_factory=dict)
     created_at: datetime | None = None
+    # Week 6: groups this Ask under a Conversation for the /ask chat UI.
+    # Nullable -- asks made outside a conversation context (the CLI, or any
+    # future non-chat caller) stay valid with no backfill needed. Never a new
+    # generation capability: no prior-turn context is passed to the LLM,
+    # spec §3.2's "one ask = one pipeline run" non-goal is unchanged.
+    conversation_id: UUID | None = None
+
+
+class Conversation(_Frozen):
+    """A titled container grouping already-independent Asks (spec §5
+    conversations, Week 6). NOT a chat session with memory -- each grouped
+    Ask still runs its own full, independent pipeline (spec §3.2).
+
+    ``turn_count``/``latest_status`` are read-only derived fields populated
+    only by ``Repository.list_conversations`` (same pattern as
+    ``EvalRun.started_at``/``suite`` in Week 5 AD-2) -- None elsewhere.
+    """
+
+    id: UUID
+    title: str
+    created_at: datetime | None = None
+    turn_count: int | None = None
+    latest_status: AskStatus | None = None
 
 
 class EvalCase(_Frozen):

@@ -30,7 +30,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID, uuid4
 
-from groundcite.domain.entities import Ask, Chunk
+from groundcite.domain.entities import Ask, Chunk, Conversation
 from groundcite.domain.results import (
     Abstention,
     AbstentionReason,
@@ -184,10 +184,16 @@ class AskService:
         self,
         question: str,
         document_slugs: Sequence[str] | None = None,
+        conversation_id: UUID | None = None,
     ) -> Iterator[AskEvent]:
         """Full §7 pipeline → a stream of ``AskEvent``s (AD-2). One terminal
         event (FINAL or ERROR) last. Raises a config error at call time if the
-        prerequisites for full mode are missing (AD-1/AD-3)."""
+        prerequisites for full mode are missing (AD-1/AD-3).
+
+        ``conversation_id`` (Week 6) only TAGS the persisted ``Ask`` row and
+        the terminal event's data -- it never changes what gets retrieved or
+        generated. No prior-turn context is read or passed to the LLM; each
+        call is still one fully independent pipeline run (spec §3.2)."""
         if self._llm is None:
             raise RuntimeError(
                 "ask() requires an LLM provider (AD-1); the container did not wire one."
@@ -198,7 +204,7 @@ class AskService:
                 "(AD-3): set RERANKER_ENABLED=true. Use `groundcite ask --retrieval-only` "
                 "to run retrieval without generating."
             )
-        return self._ask_events(question, document_slugs)
+        return self._ask_events(question, document_slugs, conversation_id)
 
     # --- replay reads (Week 4: ``GET /asks/{id}``, spec §9) -------------------
     # Thin Repository delegates so the API owns no adapter reference (§4
@@ -215,15 +221,53 @@ class AskService:
             return []
         return self._repository.get_ask_citations(ask_id)
 
+    # --- conversations (Week 6): thin repository delegates, same shape as
+    # get_ask/get_ask_citations above -- conversations are "more things
+    # AskService reads/writes about Asks," not a separate service. ----------
+
+    def create_conversation(self, title: str) -> Conversation | None:
+        if self._repository is None:
+            return None
+        return self._repository.create_conversation(title)
+
+    def get_conversation(self, conversation_id: UUID) -> Conversation | None:
+        if self._repository is None:
+            return None
+        return self._repository.get_conversation(conversation_id)
+
+    def list_conversations(self) -> list[Conversation]:
+        if self._repository is None:
+            return []
+        return self._repository.list_conversations()
+
+    def list_conversation_asks(self, conversation_id: UUID) -> list[Ask]:
+        if self._repository is None:
+            return []
+        return self._repository.list_conversation_asks(conversation_id)
+
     def _ask_events(
-        self, question: str, document_slugs: Sequence[str] | None
+        self,
+        question: str,
+        document_slugs: Sequence[str] | None,
+        conversation_id: UUID | None,
     ) -> Iterator[AskEvent]:
         try:
-            yield from self._run(question, document_slugs)
+            yield from self._run(question, document_slugs, conversation_id)
         except Exception as exc:
-            yield _event(AskEventType.ERROR, {"message": str(exc)})
+            yield _event(
+                AskEventType.ERROR,
+                {
+                    "message": str(exc),
+                    "conversation_id": str(conversation_id) if conversation_id else None,
+                },
+            )
 
-    def _run(self, question: str, document_slugs: Sequence[str] | None) -> Generator[AskEvent]:
+    def _run(
+        self,
+        question: str,
+        document_slugs: Sequence[str] | None,
+        conversation_id: UUID | None,
+    ) -> Generator[AskEvent]:
         started = time.perf_counter()
         yield _event(AskEventType.STAGE, {"stage": "retrieving"})
 
@@ -238,7 +282,9 @@ class AskService:
             matches(c.clause_path, cid) for c in chunks for cid in retrieval.clause_ids
         )
         if not chunks or (not has_exact_clause and top_score < self._tau_retrieval):
-            yield from self._emit_abstain(AbstentionReason.WEAK_RETRIEVAL, retrieval, started, None)
+            yield from self._emit_abstain(
+                AbstentionReason.WEAK_RETRIEVAL, retrieval, started, None, conversation_id
+            )
             return
 
         # Generation.
@@ -260,7 +306,12 @@ class AskService:
             )
             if isinstance(parsed, ParseError):
                 yield from self._emit_abstain(
-                    AbstentionReason.UNCITED, retrieval, started, usage, "parse failed after repair"
+                    AbstentionReason.UNCITED,
+                    retrieval,
+                    started,
+                    usage,
+                    conversation_id,
+                    "parse failed after repair",
                 )
                 return
 
@@ -271,6 +322,7 @@ class AskService:
                 retrieval,
                 started,
                 usage,
+                conversation_id,
                 "insufficient context",
             )
             return
@@ -281,7 +333,12 @@ class AskService:
             text, usage, parsed = yield from self._repair(llm, question, chunks, language, gate_b)
             if isinstance(parsed, ParseError):
                 yield from self._emit_abstain(
-                    AbstentionReason.UNCITED, retrieval, started, usage, "repair was unparseable"
+                    AbstentionReason.UNCITED,
+                    retrieval,
+                    started,
+                    usage,
+                    conversation_id,
+                    "repair was unparseable",
                 )
                 return
             if parsed.insufficient:
@@ -290,13 +347,14 @@ class AskService:
                     retrieval,
                     started,
                     usage,
+                    conversation_id,
                     "insufficient after repair",
                 )
                 return
             gate_b = _gate_b(parsed, valid_ids)
             if gate_b is not None:
                 yield from self._emit_abstain(
-                    AbstentionReason.UNCITED, retrieval, started, usage, gate_b
+                    AbstentionReason.UNCITED, retrieval, started, usage, conversation_id, gate_b
                 )
                 return
 
@@ -331,6 +389,7 @@ class AskService:
                 retrieval, usage_eff, latency_ms, top_score, "grounded", None
             ),
             created_at=datetime.now(UTC),
+            conversation_id=conversation_id,
         )
         if self._repository is not None:
             self._repository.save_ask(ask_row, citations)
@@ -342,6 +401,7 @@ class AskService:
                 "usage": usage_eff.model_dump(mode="json"),
                 "ask_id": str(ask_row.id),
                 "latency_ms": latency_ms,
+                "conversation_id": str(conversation_id) if conversation_id else None,
             },
         )
 
@@ -351,6 +411,7 @@ class AskService:
         retrieval: RetrievalResult,
         started: float,
         usage: TokenUsage | None,
+        conversation_id: UUID | None,
         note: str | None = None,
     ) -> Generator[AskEvent]:
         top_passages = tuple(retrieval.chunks[: self._context_k])
@@ -384,6 +445,7 @@ class AskService:
                 retrieval, usage_eff, latency_ms, confidence, "abstained", note
             ),
             created_at=datetime.now(UTC),
+            conversation_id=conversation_id,
         )
         if self._repository is not None:
             self._repository.save_ask(ask_row, [])
@@ -395,6 +457,7 @@ class AskService:
                 "usage": usage_eff.model_dump(mode="json"),
                 "ask_id": str(ask_row.id),
                 "latency_ms": latency_ms,
+                "conversation_id": str(conversation_id) if conversation_id else None,
             },
         )
 

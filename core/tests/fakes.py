@@ -7,9 +7,10 @@ runs without the pdf/embed extras or a live Postgres.
 from __future__ import annotations
 
 from collections.abc import Generator, Sequence
-from uuid import UUID
+from datetime import UTC, datetime
+from uuid import UUID, uuid4
 
-from groundcite.domain.entities import Ask, Chunk, Document, EvalCase, Section
+from groundcite.domain.entities import Ask, Chunk, Conversation, Document, EvalCase, Section
 from groundcite.domain.results import Citation, EvalResult, EvalRun, TokenUsage
 from groundcite.ports.protocols import Vector
 
@@ -169,6 +170,7 @@ class FakeRepository:
         self.chunks: dict[str, list[Chunk]] = {}
         self.asks: dict[UUID, Ask] = {}
         self.citations: dict[UUID, list[Citation]] = {}
+        self.conversations: dict[UUID, Conversation] = {}
         self.eval_cases: dict[UUID, EvalCase] = {}
         self.eval_runs: dict[UUID, EvalRun] = {}
         self.eval_results: dict[UUID, list[EvalResult]] = {}
@@ -239,6 +241,39 @@ class FakeRepository:
         # Citation.clause_path/claim are already materialized at save time on the
         # FakeRepository (no chunks join needed); order by rank (spec §9 replay).
         return sorted(self.citations.get(ask_id, ()), key=lambda c: c.rank)
+
+    def create_conversation(self, title: str) -> Conversation:
+        conv = Conversation(id=uuid4(), title=title, created_at=datetime.now(UTC))
+        self.conversations[conv.id] = conv
+        return conv
+
+    def get_conversation(self, conversation_id: UUID) -> Conversation | None:
+        return self.conversations.get(conversation_id)
+
+    def list_conversations(self) -> list[Conversation]:
+        # Newest first: insertion order reversed (same pattern as
+        # list_eval_runs) -- avoids sorting by created_at, which would be a
+        # timing-flaky and naive/aware-datetime-comparison-fragile substitute
+        # for "the order conversations were actually created in."
+        out = []
+        for conv in reversed(list(self.conversations.values())):
+            asks = [a for a in self.asks.values() if a.conversation_id == conv.id]
+            latest = max(
+                asks, key=lambda a: a.created_at or datetime.min.replace(tzinfo=UTC), default=None
+            )
+            out.append(
+                conv.model_copy(
+                    update={
+                        "turn_count": len(asks),
+                        "latest_status": latest.status if latest else None,
+                    }
+                )
+            )
+        return out
+
+    def list_conversation_asks(self, conversation_id: UUID) -> list[Ask]:
+        asks = [a for a in self.asks.values() if a.conversation_id == conversation_id]
+        return sorted(asks, key=lambda a: a.created_at or datetime.min.replace(tzinfo=UTC))
 
     def load_suite(self, suite: str) -> list[EvalCase]:
         return []

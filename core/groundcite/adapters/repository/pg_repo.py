@@ -19,7 +19,7 @@ from uuid import UUID
 
 import psycopg
 
-from groundcite.domain.entities import Ask, Chunk, Document, EvalCase, Section
+from groundcite.domain.entities import Ask, Chunk, Conversation, Document, EvalCase, Section
 from groundcite.domain.results import AskStatus, Citation, EvalResult, EvalRun
 
 # `suite` is not a real eval_runs column (rule 2: no schema change for a
@@ -189,11 +189,12 @@ class PgRepository:
         with self._connect() as conn, conn.transaction():
             conn.execute(
                 """INSERT INTO asks
-                     (id, question, status, answer_md, confidence, latency_ms,
-                      cost_usd, pipeline_debug, created_at)
-                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s, coalesce(%s, now()))""",
+                     (id, conversation_id, question, status, answer_md, confidence,
+                      latency_ms, cost_usd, pipeline_debug, created_at)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s, coalesce(%s, now()))""",
                 (
                     ask.id,
+                    ask.conversation_id,
                     ask.question,
                     ask.status.value,
                     ask.answer_md,
@@ -218,7 +219,7 @@ class PgRepository:
         with self._connect() as conn:
             row = conn.execute(
                 """SELECT id, question, status, answer_md, confidence, latency_ms,
-                          cost_usd, pipeline_debug, created_at
+                          cost_usd, pipeline_debug, created_at, conversation_id
                    FROM asks WHERE id = %s""",
                 (ask_id,),
             ).fetchone()
@@ -234,6 +235,7 @@ class PgRepository:
             cost_usd=row[6],
             pipeline_debug=row[7] or {},  # psycopg3 auto-deserializes jsonb to dict
             created_at=row[8],
+            conversation_id=row[9],
         )
 
     def get_ask_citations(self, ask_id: UUID) -> list[Citation]:
@@ -256,6 +258,77 @@ class PgRepository:
                 score=r[2],
                 claim=None,
                 clause_path=r[3],
+            )
+            for r in rows
+        ]
+
+    # --- conversations (Week 6) -------------------------------------------
+
+    def create_conversation(self, title: str) -> Conversation:
+        with self._connect() as conn:
+            row = conn.execute(
+                """INSERT INTO conversations (title) VALUES (%s)
+                   RETURNING id, title, created_at""",
+                (title,),
+            ).fetchone()
+        assert row is not None
+        return Conversation(id=row[0], title=row[1], created_at=row[2])
+
+    def get_conversation(self, conversation_id: UUID) -> Conversation | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT id, title, created_at FROM conversations WHERE id = %s",
+                (conversation_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return Conversation(id=row[0], title=row[1], created_at=row[2])
+
+    def list_conversations(self) -> list[Conversation]:
+        # turn_count/latest_status derived via a correlated subquery joining
+        # asks (Week 6 AD-1 -- same read-only-derived-field technique as
+        # Week 5 AD-2's EvalRun.suite, no new aggregate table). latest_status
+        # is the most recent turn's status, not an aggregate across turns.
+        with self._connect() as conn:
+            rows = conn.execute(
+                """SELECT c.id, c.title, c.created_at,
+                          (SELECT count(*) FROM asks a WHERE a.conversation_id = c.id),
+                          (SELECT a.status FROM asks a WHERE a.conversation_id = c.id
+                             ORDER BY a.created_at DESC LIMIT 1)
+                   FROM conversations c
+                   ORDER BY c.created_at DESC"""
+            ).fetchall()
+        return [
+            Conversation(
+                id=r[0],
+                title=r[1],
+                created_at=r[2],
+                turn_count=r[3],
+                latest_status=AskStatus(r[4]) if r[4] is not None else None,
+            )
+            for r in rows
+        ]
+
+    def list_conversation_asks(self, conversation_id: UUID) -> list[Ask]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """SELECT id, question, status, answer_md, confidence, latency_ms,
+                          cost_usd, pipeline_debug, created_at, conversation_id
+                   FROM asks WHERE conversation_id = %s ORDER BY created_at""",
+                (conversation_id,),
+            ).fetchall()
+        return [
+            Ask(
+                id=r[0],
+                question=r[1],
+                status=AskStatus(r[2]),
+                answer_md=r[3],
+                confidence=r[4],
+                latency_ms=r[5],
+                cost_usd=r[6],
+                pipeline_debug=r[7] or {},
+                created_at=r[8],
+                conversation_id=r[9],
             )
             for r in rows
         ]

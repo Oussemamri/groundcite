@@ -86,3 +86,25 @@ def test_list_eval_runs_returns_rows_or_empty() -> None:
         # newest-first: we cannot assert timestamps from here without a second
         # query, but the query is ORDER BY started_at DESC — verified by SQL.
         assert all(r.git_sha for r in runs), "git_sha is NOT NULL"
+
+
+def test_conversation_create_get_list_round_trip() -> None:
+    """Week 6: the one thing FakeRepository cannot cover -- the real SQL
+    (correlated subquery for turn_count/latest_status, the FK to asks)."""
+    repo = _repo()
+    conv = repo.create_conversation("live-DB integration test conversation")
+
+    fetched = repo.get_conversation(conv.id)
+    assert fetched is not None
+    assert fetched.title == "live-DB integration test conversation"
+    assert fetched.created_at is not None
+
+    listed = repo.list_conversations()
+    match = next((c for c in listed if c.id == conv.id), None)
+    assert match is not None, "newly created conversation missing from list_conversations()"
+    assert match.turn_count == 0, "no asks saved yet"
+    assert match.latest_status is None
+
+    assert repo.get_conversation(uuid4()) is None
+    assert repo.list_conversation_asks(conv.id) == []
+    assert repo.list_conversation_asks(uuid4()) == []

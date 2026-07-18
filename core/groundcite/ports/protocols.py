@@ -15,6 +15,7 @@ from uuid import UUID
 from groundcite.domain.entities import (
     Ask,
     Chunk,
+    Conversation,
     Document,
     EvalCase,
     ParsedDocument,
@@ -205,6 +206,26 @@ class Repository(Protocol):
         ``citations`` table stores chunk_id/rank/score but not clause_path, so
         the adapter joins ``chunks`` to populate ``Citation.clause_path``;
         ``claim`` is transient and stays None on read."""
+
+    # --- conversations (Week 6) ---
+    def create_conversation(self, title: str) -> Conversation:
+        """Create a new Conversation (title is caller-supplied -- Week 6 AD-3:
+        the first ~80 chars of the opening question, never LLM-generated)."""
+
+    def get_conversation(self, conversation_id: UUID) -> Conversation | None: ...
+
+    def list_conversations(self) -> list[Conversation]:
+        """All Conversations, newest first, ``turn_count``/``latest_status``
+        populated via a join against ``asks`` (Week 6 AD-1 -- same read-only-
+        derived-field technique as Week 5 AD-2's ``EvalRun.suite``, no new
+        aggregate table)."""
+
+    def list_conversation_asks(self, conversation_id: UUID) -> list[Ask]:
+        """A Conversation's Asks in turn order (``created_at`` ascending).
+        Citations are NOT joined here -- callers fetch them per-Ask via the
+        existing ``get_ask_citations`` (Week 6: conversations realistically
+        hold a handful of turns, the same cheap-per-row-fetch precedent as
+        ``/library``'s document rows and Week 5's eval run rows)."""
 
     # --- evals ---
     def load_suite(self, suite: str) -> list[EvalCase]: ...
