@@ -38,12 +38,12 @@ interface AbstentionCardProps {
  */
 export function AbstentionCard({ reason, topPassages, documentSlug }: AbstentionCardProps) {
   return (
-    <div className="rounded-xl border border-chat-abstained/25 bg-chat-abstained/[0.04] p-5">
-      <h2 className="text-[15px] font-semibold text-chat-ink">No grounded answer</h2>
-      <p className="mt-1 text-[13.5px] text-chat-ink/60">
+    <div className="rounded-xl border border-abstained/25 bg-abstained/[0.04] p-5">
+      <h2 className="text-[15px] font-semibold text-ink">No grounded answer</h2>
+      <p className="mt-1 text-[13.5px] text-ink/60">
         Confidence below threshold — closest passages shown below.
       </p>
-      {reason && <p className="mt-2 text-xs text-chat-ink/45">{REASON_COPY[reason]}</p>}
+      {reason && <p className="mt-2 text-xs text-ink/45">{REASON_COPY[reason]}</p>}
       {topPassages && topPassages.length > 0 && (
         <div className="mt-3.5 flex flex-col gap-1.5">
           {topPassages.map((p, i) => (

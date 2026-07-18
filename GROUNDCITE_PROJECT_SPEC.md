@@ -32,34 +32,34 @@
 | `Abstention` | Grounding gate failed → structured "cannot answer" | refusal, error |
 | `Suite / Case / Run` | Eval terminology | test (reserved for pytest) |
 
-### 2.2 Visual theme ("mission control")
-- Background `#0B0E14` (near-black), surface `#131822`, border `#232B3A`.
-- Text `#E6EAF2`; accents: **grounded green** `#2FBF71`, **abstained amber** `#F5A623`, link cyan `#4CC3FF`.
-- Fonts: Inter (UI), **JetBrains Mono for every clause ID, standard code, and score** — monospace clause IDs are a signature detail.
-- UI copy tone: calm, aviation-flavored, never cute in errors. Abstention card title: "No grounded answer" (subtitle: "Confidence below threshold — closest passages shown below."). Do not joke in abstentions.
-- Every answer shows a status chip: `GROUNDED` (green) or `ABSTAINED` (amber) + retrieval confidence.
-- Applies to `/library`, `/evals`, `/documents/[slug]`. `/ask` uses a distinct theme — see §2.2.1.
-
-### 2.2.1 `/ask` chat theme (Week 6, deliberate pivot — one page only)
-`/ask` was redesigned from a one-shot Q&A page into a multi-turn chat
-experience against an owner-supplied high-fidelity design handoff
-(`design_handoff_chat_redesign/`). The theme below applies **only to `/ask`**
-— every other page keeps §2.2's dark "mission control" theme unchanged. This
-is a deliberate, owner-directed choice for this one page, not a site-wide
-rebrand: the honesty signals (per-turn pipeline status, GROUNDED/ABSTAINED
-chips, retrieval confidence, abstention copy) carry over unchanged, just
-recolored.
-- Warm "paper" palette: page background `#F0EEE6`, panel background `#E9E6DC`,
-  card background `#FDFCF8`, ink `#2B2A24`.
-- Accent `#C15F3C` (hover `#A94F32`) for links, the primary button, and active
-  sidebar state; **grounded** `#1C7A4D`, **abstained** `#A16207` (still amber-
-  family, never red — §2.2's abstention-is-not-an-error rule is unchanged).
-- Fonts: **Source Serif 4** for all prose (questions, answers, headings) —
-  new for this page only — **JetBrains Mono still carries every clause ID,
-  standard code, and score**, same signature-detail rule as §2.2.
-- Layout: full-viewport 3-column shell (collapsible conversation-history
-  sidebar, chat thread + composer, citations panel) instead of the shared
-  top `Nav` + single-column layout every other page uses.
+### 2.2 Visual theme (warm "paper" — site-wide)
+One theme, every page, from the owner-supplied Claude design handoff
+(`design_handoff_chat_redesign/`). History, stated plainly: v1 specified a
+dark "mission control" theme; Week 6 introduced this warm theme for `/ask`
+only (then §2.2.1); the owner then directed a site-wide design sync, so the
+warm theme is now the single source of visual truth and the dark theme is
+retired. The single semantic token set lives in
+`apps/web/tailwind.config.ts` — pages never define their own colors.
+- Surfaces: page `#F0EEE6` (paper), panels/sidebars/nav `#E9E6DC`, content
+  cards `#FDFCF8`, inputs `#FFFFFF`, user chat bubbles `#E7E0CF`.
+- Hairlines: `#DCD8CA` (default), `#CFC9B9` (dim), `#E2DED0` (cards),
+  `#E0D9C7` (inputs/bubbles). Ink `#2B2A24` with opacity tiers for muted
+  text.
+- Accent `#C15F3C` (hover `#A94F32`) for links, primary buttons, active
+  nav/sidebar state; **grounded green** `#1C7A4D`, **abstained ochre**
+  `#A16207` (amber-family, never red — abstention is not an error).
+- Fonts: **Source Serif 4** for all prose and headings; **JetBrains Mono for
+  every clause ID, standard code, score, and metadata label** — monospace
+  clause IDs are a signature detail. Section labels are mono, 10px,
+  uppercase, letter-spaced. No sans face.
+- UI copy tone: calm, aviation-flavored, never cute in errors. Abstention
+  card title: "No grounded answer" (subtitle: "Confidence below threshold —
+  closest passages shown below."). Do not joke in abstentions.
+- Every answer shows a status chip: `GROUNDED` (green) or `ABSTAINED`
+  (ochre) + retrieval confidence.
+- Layout: `/ask` is a full-viewport 3-column chat shell (collapsible
+  conversation sidebar, thread + composer, citations panel); every other
+  page uses the shared top `Nav` + single-column layout, same palette.
 
 ### 2.3 Naming conventions
 - Repo/package: `groundcite`. Python package `groundcite`, CLI `groundcite`, Docker images `groundcite-api`, `groundcite-web`.
@@ -404,14 +404,14 @@ Rules: routes are thin (parse → service → serialize); pydantic response mode
 
 ## 10. Web app (Next.js 15, App Router, TS strict, TanStack Query, Tailwind)
 
-- `/ask` — a multi-turn chat experience (Week 6, §2.2.1 theme), not a single
+- `/ask` — a multi-turn chat experience (Week 6, §2.2 theme), not a single
   Q&A form: left sidebar of past conversations (collapsible), a scrollable
   turn thread (each turn still its own independent pipeline run — §3.2), a
   fixed composer, and a **right panel: citation cards** (clause_path mono,
   snippet, score) for the latest turn — clicking a citation opens the reader
   anchored & highlighted, same as before. Every turn shows its own status
   chip GROUNDED/ABSTAINED + retrieval confidence and pipeline-stage row
-  (§2.2.1's honesty signals, unchanged from the original one-shot design).
+  (§2.2's honesty signals, unchanged from the original one-shot design).
 - `/library` — documents table (org, code, version, chunks, license_note) + upload with ingestion progress.
 - `/documents/[slug]` — reader: left clause tree, right content, `?chunk=` deep-link highlights.
 - `/evals` — runs table + per-suite metric trend (recharts) + per-case drill-down showing retrieved-vs-expected clauses. **This page is the screenshot for the blog post.**

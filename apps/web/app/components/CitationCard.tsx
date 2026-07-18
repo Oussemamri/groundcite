@@ -31,24 +31,24 @@ export function CitationCard({
   const body = (
     <>
       <div className="flex items-center justify-between gap-2">
-        <span className="font-mono text-[11px] text-chat-accent">
+        <span className="font-mono text-[11px] text-accent">
           {rank !== undefined ? `[${rank}] ` : ""}
           {clausePath}
         </span>
-        <span className="font-mono text-[11px] text-chat-ink/40">{score.toFixed(4)}</span>
+        <span className="font-mono text-[11px] text-ink/40">{score.toFixed(4)}</span>
       </div>
-      <p className="mt-1.5 line-clamp-4 text-xs leading-[1.55] text-chat-ink/60">{snippet}</p>
+      <p className="mt-1.5 line-clamp-4 text-xs leading-[1.55] text-ink/60">{snippet}</p>
     </>
   );
 
   if (!documentSlug) {
-    return <div className="rounded-lg border border-chat-line-card bg-chat-card p-3">{body}</div>;
+    return <div className="rounded-lg border border-line-card bg-card p-3">{body}</div>;
   }
 
   return (
     <Link
       href={`/documents/${encodeURIComponent(documentSlug)}?chunk=${encodeURIComponent(chunkId)}`}
-      className="block rounded-lg border border-chat-line-card bg-chat-card p-3 transition-colors hover:border-chat-accent/50"
+      className="block rounded-lg border border-line-card bg-card p-3 transition-colors hover:border-accent/50"
     >
       {body}
     </Link>

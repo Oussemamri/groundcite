@@ -81,7 +81,7 @@ export function ClauseTree({
         <div
           className={
             "flex items-center gap-1.5 rounded px-1.5 py-1 text-xs " +
-            (isActive ? "bg-link/10 text-link" : "text-text/70 hover:text-text")
+            (isActive ? "bg-accent/10 text-accent" : "text-ink/70 hover:text-ink")
           }
           style={{ paddingLeft: `${depth * 14 + 4}px` }}
         >
@@ -91,7 +91,7 @@ export function ClauseTree({
               onClick={() => toggle(node.id)}
               aria-expanded={isOpen}
               aria-label={isOpen ? `Collapse ${node.clause_id}` : `Expand ${node.clause_id}`}
-              className="w-3 shrink-0 text-center text-text/40 hover:text-text"
+              className="w-3 shrink-0 text-center text-ink/40 hover:text-ink"
             >
               {isOpen ? "−" : "+"}
             </button>
@@ -105,7 +105,7 @@ export function ClauseTree({
             className="min-w-0 flex-1 truncate text-left"
           >
             <span className="clause-id mr-1.5">{node.clause_id}</span>
-            {node.title && <span className="text-text/50">{node.title}</span>}
+            {node.title && <span className="text-ink/50">{node.title}</span>}
           </button>
         </div>
         {hasChildren && isOpen && <ul>{node.children.map((child) => renderNode(child, depth + 1))}</ul>}
@@ -114,7 +114,7 @@ export function ClauseTree({
   }
 
   if (sections.length === 0) {
-    return <p className="text-sm text-text/40">No sections.</p>;
+    return <p className="text-sm text-ink/40">No sections.</p>;
   }
 
   return <ul className="flex flex-col">{tree.map((node) => renderNode(node, 0))}</ul>;

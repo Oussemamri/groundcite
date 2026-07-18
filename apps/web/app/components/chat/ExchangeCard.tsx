@@ -5,7 +5,7 @@ import { PipelineStatus } from "@/app/components/PipelineStatus";
 import { StatusChip } from "@/app/components/StatusChip";
 
 /**
- * One full chat turn (Week 6, spec §2.2.1): the user's question, the live
+ * One full chat turn (Week 6, spec §2.2): the user's question, the live
  * pipeline-status row (the honesty signal, spec §7 -- always shown, not
  * just while streaming), then the grounded answer or the abstention card.
  * Renders identically whether `exchange` is currently streaming or was
@@ -24,7 +24,7 @@ export function ExchangeCard({
   return (
     <div className="flex flex-col gap-[28px]">
       <div className="flex justify-end">
-        <div className="max-w-[85%] rounded-[12px_12px_3px_12px] border border-chat-line-user bg-chat-bubble px-4 py-3 font-serif text-sm leading-[1.55] text-chat-ink">
+        <div className="max-w-[85%] rounded-[12px_12px_3px_12px] border border-line-user bg-bubble px-4 py-3 font-serif text-sm leading-[1.55] text-ink">
           {exchange.question}
         </div>
       </div>
@@ -33,9 +33,9 @@ export function ExchangeCard({
         <PipelineStatus currentStage={exchange.stage} done={done} />
 
         {exchange.status === "error" && (
-          <div className="rounded-xl border border-chat-abstained/25 bg-chat-abstained/[0.04] p-5">
-            <h2 className="text-[15px] font-semibold text-chat-ink">Something went wrong</h2>
-            <p className="mt-1 text-[13.5px] text-chat-ink/60">{exchange.errorMessage}</p>
+          <div className="rounded-xl border border-abstained/25 bg-abstained/[0.04] p-5">
+            <h2 className="text-[15px] font-semibold text-ink">Something went wrong</h2>
+            <p className="mt-1 text-[13.5px] text-ink/60">{exchange.errorMessage}</p>
           </div>
         )}
 
@@ -53,23 +53,23 @@ export function ExchangeCard({
         )}
 
         {(exchange.streaming || exchange.status === "grounded") && exchange.answerMd && (
-          <div className="rounded-xl border border-chat-line-card bg-chat-card px-[22px] py-5">
+          <div className="rounded-xl border border-line-card bg-card px-[22px] py-5">
             {exchange.status === "grounded" && (
               <div className="mb-3.5">
                 <StatusChip status="grounded" confidence={exchange.confidence} />
               </div>
             )}
-            <div className="whitespace-pre-wrap font-serif text-[14.5px] leading-[1.65] text-chat-ink/90">
+            <div className="whitespace-pre-wrap font-serif text-[14.5px] leading-[1.65] text-ink/90">
               {renderAnswerMd(exchange.answerMd)}
               {exchange.streaming && (
                 <span
                   aria-hidden
-                  className="ml-0.5 inline-block h-[15px] w-2 animate-pulse bg-chat-accent align-text-bottom"
+                  className="ml-0.5 inline-block h-[15px] w-2 animate-pulse bg-accent align-text-bottom"
                 />
               )}
             </div>
             {exchange.status === "grounded" && (
-              <div className="mt-4 flex gap-3.5 border-t border-chat-line pt-3 font-mono text-[10px] text-chat-ink/35">
+              <div className="mt-4 flex gap-3.5 border-t border-line pt-3 font-mono text-[10px] text-ink/35">
                 <span>
                   {exchange.citations.length} citation{exchange.citations.length === 1 ? "" : "s"}
                 </span>

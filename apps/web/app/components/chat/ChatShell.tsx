@@ -14,7 +14,7 @@ import { Sidebar } from "./Sidebar";
 const SIDEBAR_BREAKPOINT = 1100;
 
 /**
- * The `/ask` chat page (spec §2.2.1, Week 6) -- one component shared by
+ * The `/ask` chat page (spec §2.2, Week 6) -- one component shared by
  * `/ask` (fresh conversation, `conversationId` null) and
  * `/ask/[conversationId]` (load and continue a past one), mirroring the
  * existing `DocumentReaderClient` pattern (one component, parameterized by
@@ -117,7 +117,7 @@ export function ChatShell({ conversationId: initialConversationId }: { conversat
     : undefined) ?? (allExchanges.length > 0 ? allExchanges[0]?.question : undefined);
 
   return (
-    <div className="flex h-dvh overflow-hidden bg-chat-bg text-chat-ink">
+    <div className="flex h-dvh overflow-hidden bg-paper text-ink">
       <Sidebar
         open={sidebarOpen}
         activeConversationId={activeConversationId}
@@ -145,7 +145,7 @@ export function ChatShell({ conversationId: initialConversationId }: { conversat
         <div ref={threadRef} className="flex-1 overflow-y-auto">
           <div className="mx-auto flex max-w-[768px] flex-col gap-7 px-6 py-8">
             {allExchanges.length === 0 && (
-              <p className="text-sm text-chat-ink/40">
+              <p className="text-sm text-ink/40">
                 Ask a question about an ingested standard — every answer carries verifiable
                 clause citations, or the system abstains.
               </p>

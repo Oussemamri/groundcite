@@ -3,7 +3,7 @@ import { latestPassages } from "./ExchangeCard";
 import type { Exchange } from "@/lib/chatExchange";
 
 /**
- * Right panel (spec §10, §2.2.1): the LATEST turn's citations or closest
+ * Right panel (spec §10, §2.2): the LATEST turn's citations or closest
  * passages -- older turns keep their own permanent record inline via
  * `ExchangeCard`'s `AbstentionCard`/citation footer, this panel is
  * deliberately latest-only ("Citations · latest answer", not a full-thread
@@ -25,12 +25,12 @@ export function CitationsPanel({
   const showRunDetail = latest && (latest.status === "grounded" || latest.status === "abstained");
 
   return (
-    <aside className="hidden w-[320px] shrink-0 overflow-y-auto border-l border-chat-line bg-chat-panel p-5 min-[1360px]:block">
-      <h2 className="font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-chat-ink/45">
+    <aside className="hidden w-[320px] shrink-0 overflow-y-auto border-l border-line bg-panel p-5 min-[1360px]:block">
+      <h2 className="font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-ink/45">
         {label} · latest answer
       </h2>
       {passages.length === 0 ? (
-        <p className="mt-3 text-xs text-chat-ink/35">
+        <p className="mt-3 text-xs text-ink/35">
           {latest ? "—" : "Citations will appear here."}
         </p>
       ) : (
@@ -50,15 +50,15 @@ export function CitationsPanel({
       )}
 
       {showRunDetail && latest && (
-        <div className="mt-5 border-t border-chat-line pt-4">
-          <h2 className="font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-chat-ink/45">
+        <div className="mt-5 border-t border-line pt-4">
+          <h2 className="font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-ink/45">
             Run detail
           </h2>
-          <div className="mt-2.5 grid grid-cols-[1fr_auto] gap-x-3 gap-y-1.5 text-xs text-chat-ink/60">
+          <div className="mt-2.5 grid grid-cols-[1fr_auto] gap-x-3 gap-y-1.5 text-xs text-ink/60">
             <span>Retrieval confidence</span>
             <span
               className={
-                "font-mono " + (latest.status === "grounded" ? "text-chat-grounded" : "")
+                "font-mono " + (latest.status === "grounded" ? "text-grounded" : "")
               }
             >
               {latest.confidence !== null ? latest.confidence.toFixed(4) : "—"}

@@ -1,14 +1,15 @@
 import type { Config } from "tailwindcss";
 
 /**
- * GroundCite "mission control" theme (spec §2.2) — applies to `/library`,
- * `/evals`, `/documents/[slug]`. JetBrains Mono is the signature detail —
- * every clause ID, standard code, and score renders in mono.
+ * GroundCite warm "paper" theme (spec §2.2) — the single, site-wide token
+ * system, from the owner-supplied Claude design handoff
+ * (design_handoff_chat_redesign/). One semantic palette, no per-page
+ * namespaces: every page reads from these tokens, so the design cannot
+ * drift page-by-page again.
  *
- * The `chat` color set (spec §2.2.1, Week 6) is a SEPARATE, distinctly-
- * prefixed palette for `/ask` only — a deliberate, owner-directed pivot for
- * that one page, additive here so the tokens above stay untouched for every
- * other page.
+ * JetBrains Mono is still the signature detail — every clause ID, standard
+ * code, and score renders in mono (spec §2.2, unchanged through every
+ * theme iteration).
  */
 const config: Config = {
   content: ["./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./lib/**/*.{ts,tsx}"],
@@ -16,42 +17,35 @@ const config: Config = {
     extend: {
       colors: {
         // Surfaces
-        background: "#0B0E14", // near-black
-        surface: "#131822",
-        border: "#232B3A",
+        paper: "#F0EEE6", // page background
+        panel: "#E9E6DC", // sidebars, nav, footers
+        card: "#FDFCF8", // content cards, table surfaces
+        composer: "#FFFFFF", // input fields
+        bubble: "#E7E0CF", // user chat bubbles
+        header: "rgba(250,249,245,0.92)", // sticky headers, paired with backdrop-blur
         // Text
-        text: "#E6EAF2",
-        // Accents / status
-        grounded: "#2FBF71", // GROUNDED chip (green)
-        abstained: "#F5A623", // ABSTAINED chip (amber)
-        link: "#4CC3FF", // cyan
-        // /ask chat theme (spec §2.2.1, Week 6) — warm "paper" palette.
-        chat: {
-          bg: "#F0EEE6",
-          panel: "#E9E6DC",
-          card: "#FDFCF8",
-          composer: "#FFFFFF",
-          bubble: "#E7E0CF",
-          ink: "#2B2A24",
-          line: "#DCD8CA",
-          "line-dim": "#CFC9B9",
-          "line-card": "#E2DED0",
-          "line-user": "#E0D9C7",
-          accent: {
-            DEFAULT: "#C15F3C",
-            hover: "#A94F32",
-          },
-          grounded: "#1C7A4D",
-          abstained: "#A16207",
-          header: "rgba(250,249,245,0.92)", // sticky chat header, paired with backdrop-blur
+        ink: "#2B2A24",
+        // Hairlines
+        line: {
+          DEFAULT: "#DCD8CA",
+          dim: "#CFC9B9",
+          card: "#E2DED0",
+          user: "#E0D9C7",
         },
+        // Accents / status
+        accent: {
+          DEFAULT: "#C15F3C",
+          hover: "#A94F32",
+        },
+        grounded: "#1C7A4D", // GROUNDED chip (green)
+        abstained: "#A16207", // ABSTAINED chip (ochre — amber-family, never red)
       },
       fontFamily: {
-        // Inter for UI, JetBrains Mono for clause IDs / codes / scores (spec §2.2).
-        sans: ["var(--font-inter)", "ui-sans-serif", "system-ui", "sans-serif"],
-        mono: ["var(--font-jetbrains-mono)", "ui-monospace", "SFMono-Regular", "monospace"],
-        // /ask chat theme prose (spec §2.2.1, Week 6) — Source Serif 4.
+        // Source Serif 4 for all prose; JetBrains Mono for clause IDs /
+        // codes / scores / metadata (spec §2.2). No sans face — the design
+        // uses exactly these two.
         serif: ["var(--font-source-serif)", "Georgia", "serif"],
+        mono: ["var(--font-jetbrains-mono)", "ui-monospace", "SFMono-Regular", "monospace"],
       },
     },
   },

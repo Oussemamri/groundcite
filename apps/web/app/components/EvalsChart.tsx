@@ -24,12 +24,14 @@ export interface SuiteBaseline {
 // Chart-only series colors (not the app's grounded/abstained status accents --
 // those are reserved for ask-outcome status elsewhere, e.g. StatusChip; a
 // generic 3-series comparison chart gets its own identity, not a borrowed
-// status color). Validated CVD-safe on the app's dark surface (#131822) via
-// the dataviz skill's validator: all 3 checks PASS (worst adjacent ΔE 8.4
-// protan / 19.8 normal-vision).
-const COLOR_RECALL = "#3987e5"; // blue
-const COLOR_CITATION_PRECISION = "#199e70"; // aqua/green
-const COLOR_ABSTENTION_ACCURACY = "#c98500"; // amber
+// status color). Validated CVD-safe on the warm card surface (#FDFCF8) via
+// the dataviz skill's validator: all hard gates PASS (worst adjacent ΔE 9.1
+// protan / 22.9 normal-vision). The contrast WARN on aqua/yellow (<3:1 on a
+// light surface) is relieved per the skill's relief rule by the direct
+// per-bar value labels below AND the runs table repeating the same numbers.
+const COLOR_RECALL = "#2a78d6"; // blue
+const COLOR_CITATION_PRECISION = "#1baf7a"; // aqua/green
+const COLOR_ABSTENTION_ACCURACY = "#eda100"; // yellow/amber
 
 function pct(v: number | null): number | null {
   return v === null ? null : Math.round(v * 1000) / 10;
@@ -49,7 +51,7 @@ function PctLabel(props: LabelProps) {
       x={x + width / 2}
       y={y - 6}
       textAnchor="middle"
-      className="fill-text/70 font-mono"
+      className="fill-ink/70 font-mono"
       fontSize={10}
     >
       {value.toFixed(1)}%
@@ -76,15 +78,15 @@ function ChartTooltip({
   if (!active || !payload || payload.length === 0) return null;
   const sha = payload[0]?.payload.git_sha;
   return (
-    <div className="rounded border border-border bg-surface p-3 text-xs shadow-lg">
-      <div className="font-medium text-text">{label}</div>
-      {sha && <div className="mt-0.5 font-mono text-text/50">git {sha}</div>}
+    <div className="rounded border border-line bg-card p-3 text-xs shadow-lg">
+      <div className="font-medium text-ink">{label}</div>
+      {sha && <div className="mt-0.5 font-mono text-ink/50">git {sha}</div>}
       <div className="mt-2 flex flex-col gap-1">
         {payload.map((p) => (
           <div key={p.name} className="flex items-center gap-2">
             <span aria-hidden className="h-2 w-2 rounded-full" style={{ backgroundColor: p.color }} />
-            <span className="text-text/70">{p.name}</span>
-            <span className="ml-auto font-mono text-text">{p.value.toFixed(1)}%</span>
+            <span className="text-ink/70">{p.name}</span>
+            <span className="ml-auto font-mono text-ink">{p.value.toFixed(1)}%</span>
           </div>
         ))}
       </div>
@@ -112,23 +114,27 @@ export function EvalsChart({ data }: { data: SuiteBaseline[] }) {
     <div className="h-80 w-full">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={rows} margin={{ top: 24, right: 8, left: 0, bottom: 8 }} barGap={4}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#232B3A" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="#DCD8CA" vertical={false} />
           <XAxis
             dataKey="suite"
-            tick={{ fill: "#E6EAF2", fontFamily: "var(--font-jetbrains-mono)", fontSize: 12 }}
-            axisLine={{ stroke: "#232B3A" }}
+            tick={{ fill: "#2B2A24", fontFamily: "var(--font-jetbrains-mono)", fontSize: 12 }}
+            axisLine={{ stroke: "#CFC9B9" }}
             tickLine={false}
           />
           <YAxis
             domain={[0, 100]}
             tickFormatter={(v: number) => `${v}%`}
-            tick={{ fill: "#E6EAF2AA", fontFamily: "var(--font-jetbrains-mono)", fontSize: 11 }}
+            tick={{
+              fill: "rgba(43,42,36,0.55)",
+              fontFamily: "var(--font-jetbrains-mono)",
+              fontSize: 11,
+            }}
             axisLine={false}
             tickLine={false}
             width={44}
           />
           <Tooltip
-            cursor={{ fill: "#232B3A55" }}
+            cursor={{ fill: "rgba(43,42,36,0.05)" }}
             content={(props) => (
               <ChartTooltip
                 active={props.active}
@@ -138,8 +144,8 @@ export function EvalsChart({ data }: { data: SuiteBaseline[] }) {
             )}
           />
           <Legend
-            wrapperStyle={{ fontSize: 11, color: "#E6EAF2" }}
-            formatter={(value: string) => <span style={{ color: "#E6EAF2" }}>{value}</span>}
+            wrapperStyle={{ fontSize: 11 }}
+            formatter={(value: string) => <span style={{ color: "#2B2A24" }}>{value}</span>}
           />
           <Bar
             dataKey="recall_at_5_pct"

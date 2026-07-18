@@ -12,8 +12,8 @@ export function StatusChip({
       className={
         "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-medium tracking-wide " +
         (grounded
-          ? "border-chat-grounded/40 bg-chat-grounded/10 text-chat-grounded"
-          : "border-chat-abstained/40 bg-chat-abstained/10 text-chat-abstained")
+          ? "border-grounded/40 bg-grounded/10 text-grounded"
+          : "border-abstained/40 bg-abstained/10 text-abstained")
       }
     >
       <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-current" />

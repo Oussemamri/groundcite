@@ -54,7 +54,7 @@ function EvalsChartSection({ runs }: { runs: EvalRunOut[] }) {
 
   const loaded = detailQueries.every((q) => q.data);
   if (!loaded) {
-    return <p className="text-sm text-text/40">Loading chart…</p>;
+    return <p className="text-sm text-ink/40">Loading chart…</p>;
   }
 
   const data: SuiteBaseline[] = detailQueries.map((q, i) => ({
@@ -85,21 +85,21 @@ export default function EvalsPage() {
   return (
     <main className="mx-auto max-w-6xl px-6 py-10">
       <h1 className="text-xl font-semibold">Evals</h1>
-      <p className="mt-2 max-w-3xl text-text/60">
+      <p className="mt-2 max-w-3xl text-ink/60">
         Persisted eval Runs over the far-25 corpus (spec §8). Only full-pipeline runs are stored —
         recall@k and MRR here come from those runs&apos; per-Case rows, not a separate
         retrieval-only trend.
       </p>
 
       <section className="mt-8">
-        <h2 className="text-xs font-medium uppercase tracking-widest text-text/50">
+        <h2 className="font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-ink/50">
           Latest baseline by suite
         </h2>
-        <div className="mt-3 rounded-lg border border-border bg-surface p-4">
+        <div className="mt-3 rounded-lg border border-line bg-card p-4">
           {isLoading || !runs ? (
-            <p className="text-sm text-text/40">Loading…</p>
+            <p className="text-sm text-ink/40">Loading…</p>
           ) : runs.length === 0 ? (
-            <p className="text-sm text-text/40">No eval runs yet.</p>
+            <p className="text-sm text-ink/40">No eval runs yet.</p>
           ) : (
             <EvalsChartSection runs={runs} />
           )}
@@ -107,12 +107,12 @@ export default function EvalsPage() {
       </section>
 
       <section className="mt-10 overflow-x-auto">
-        <h2 className="text-xs font-medium uppercase tracking-widest text-text/50">Runs</h2>
+        <h2 className="font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-ink/50">Runs</h2>
         <div className="mt-3">
           {isLoading ? (
-            <p className="text-sm text-text/40">Loading…</p>
+            <p className="text-sm text-ink/40">Loading…</p>
           ) : !runs || runs.length === 0 ? (
-            <p className="text-sm text-text/40">No eval runs yet.</p>
+            <p className="text-sm text-ink/40">No eval runs yet.</p>
           ) : (
             <EvalRunsTable
               runs={runs}
@@ -124,23 +124,23 @@ export default function EvalsPage() {
       </section>
 
       <section className="mt-10">
-        <h2 className="text-xs font-medium uppercase tracking-widest text-text/50">
+        <h2 className="font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-ink/50">
           Per-case drill-down
           {detail && (
-            <span className="ml-2 normal-case tracking-normal text-text/40">
+            <span className="ml-2 normal-case tracking-normal text-ink/40">
               — {detail.run.suite} · <span className="font-mono">{detail.run.git_sha}</span>
             </span>
           )}
         </h2>
-        <div className="mt-3 rounded-lg border border-border bg-surface px-4">
+        <div className="mt-3 rounded-lg border border-line bg-card px-4">
           {detailLoading || !activeRunId ? (
-            <p className="py-4 text-sm text-text/40">
+            <p className="py-4 text-sm text-ink/40">
               {activeRunId ? "Loading…" : "Select a run above."}
             </p>
           ) : detail ? (
             <EvalCaseDrilldown results={detail.results} />
           ) : (
-            <p className="py-4 text-sm text-text/40">Run not found.</p>
+            <p className="py-4 text-sm text-ink/40">Run not found.</p>
           )}
         </div>
       </section>

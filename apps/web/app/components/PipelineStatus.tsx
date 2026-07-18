@@ -24,7 +24,7 @@ export function PipelineStatus({
     <div
       role="status"
       aria-label="Pipeline status"
-      className="flex flex-wrap items-center gap-1 font-mono text-[10px] uppercase tracking-wider text-chat-ink/45"
+      className="flex flex-wrap items-center gap-1 font-mono text-[10px] uppercase tracking-wider text-ink/45"
     >
       {STEPS.map((step, i) => {
         // Reached means "a STAGE event for this step actually arrived" --
@@ -35,16 +35,16 @@ export function PipelineStatus({
         const active = !done && i === currentIdx;
         return (
           <span key={step} className="flex items-center gap-1">
-            {i > 0 && <span className="mx-1 text-chat-line-dim">/</span>}
+            {i > 0 && <span className="mx-1 text-line-dim">/</span>}
             <span
               aria-hidden
               className={
                 "h-[5px] w-[5px] rounded-full transition-colors " +
-                (reached ? "bg-chat-accent" : "bg-chat-line-dim opacity-40") +
+                (reached ? "bg-accent" : "bg-line-dim opacity-40") +
                 (active ? " animate-pulse" : "")
               }
             />
-            <span className={reached ? "text-chat-ink/80" : undefined}>{step}</span>
+            <span className={reached ? "text-ink/80" : undefined}>{step}</span>
           </span>
         );
       })}

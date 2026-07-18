@@ -59,22 +59,22 @@ function EvalRunRow({
       onClick={onSelect}
       aria-selected={selected}
       className={
-        "cursor-pointer border-b border-border last:border-0 " +
-        (selected ? "bg-link/10" : "hover:bg-surface/60")
+        "cursor-pointer border-b border-line last:border-0 " +
+        (selected ? "bg-accent/10" : "hover:bg-ink/[0.04]")
       }
     >
-      <td className="py-3 pr-4 text-text">{run.suite ?? "—"}</td>
-      <td className="py-3 pr-4 font-mono text-xs text-text/70">{run.git_sha}</td>
-      <td className="py-3 pr-4 text-xs text-text/60">{formatDate(run.started_at)}</td>
-      <td className="py-3 pr-4 font-mono text-xs text-text/70">{tau}</td>
-      <td className="py-3 pr-4 font-mono text-xs text-text/60">{model}</td>
-      <td className="py-3 pr-4 font-mono text-xs text-text/70">
+      <td className="py-3 pr-4 text-ink">{run.suite ?? "—"}</td>
+      <td className="py-3 pr-4 font-mono text-xs text-ink/70">{run.git_sha}</td>
+      <td className="py-3 pr-4 text-xs text-ink/60">{formatDate(run.started_at)}</td>
+      <td className="py-3 pr-4 font-mono text-xs text-ink/70">{tau}</td>
+      <td className="py-3 pr-4 font-mono text-xs text-ink/60">{model}</td>
+      <td className="py-3 pr-4 font-mono text-xs text-ink/70">
         {agg ? formatPct(agg.abstention_accuracy) : "…"}
       </td>
-      <td className="py-3 pr-4 font-mono text-xs text-text/70">
+      <td className="py-3 pr-4 font-mono text-xs text-ink/70">
         {agg ? formatPct(agg.mean_citation_precision) : "…"}
       </td>
-      <td className="py-3 font-mono text-xs text-text/70">
+      <td className="py-3 font-mono text-xs text-ink/70">
         {agg ? formatPct(agg.mean_recall_at_5) : "…"}
       </td>
     </tr>
@@ -93,7 +93,7 @@ export function EvalRunsTable({
   return (
     <table className="w-full min-w-[820px] border-collapse text-sm">
       <thead>
-        <tr className="border-b border-border text-left text-xs uppercase tracking-widest text-text/40">
+        <tr className="border-b border-line text-left font-mono text-[10px] uppercase tracking-[0.14em] text-ink/40">
           <th className="pb-2 pr-4 font-medium">Suite</th>
           <th className="pb-2 pr-4 font-medium">Git SHA</th>
           <th className="pb-2 pr-4 font-medium">Date</th>

@@ -108,22 +108,22 @@ export function UploadForm() {
       >
         {job.status === "done" ? (
           <>
-            <h3 className="text-sm font-semibold text-text">Ingested</h3>
-            <p className="mt-1 font-mono text-xs text-text/70">
+            <h3 className="text-sm font-semibold text-ink">Ingested</h3>
+            <p className="mt-1 font-mono text-xs text-ink/70">
               {sectionsFound ?? "?"} sections · {chunksCreated ?? "?"} chunks
               {attachedPct != null ? ` · ${(attachedPct * 100).toFixed(1)}% attached` : ""}
             </p>
           </>
         ) : (
           <>
-            <h3 className="text-sm font-semibold text-text">Ingestion failed</h3>
-            <p className="mt-1 text-sm text-text/60">{job.detail ?? "No detail returned."}</p>
+            <h3 className="text-sm font-semibold text-ink">Ingestion failed</h3>
+            <p className="mt-1 text-sm text-ink/60">{job.detail ?? "No detail returned."}</p>
           </>
         )}
         <button
           type="button"
           onClick={reset}
-          className="mt-3 rounded border border-link px-3 py-1.5 text-xs text-link transition-colors hover:bg-link/10"
+          className="mt-3 rounded border border-accent px-3 py-1.5 text-xs text-accent transition-colors hover:bg-accent/10"
         >
           Upload another
         </button>
@@ -133,9 +133,9 @@ export function UploadForm() {
 
   if (jobId && (job === null || job?.status === "queued" || job?.status === "running")) {
     return (
-      <div className="mt-4 rounded-lg border border-border bg-surface p-5">
-        <p role="status" className="flex items-center gap-2 text-sm text-text/70">
-          <span aria-hidden className="h-1.5 w-1.5 animate-pulse rounded-full bg-link" />
+      <div className="mt-4 rounded-lg border border-line bg-card p-5">
+        <p role="status" className="flex items-center gap-2 text-sm text-ink/70">
+          <span aria-hidden className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
           {job?.status === "running" ? "Ingesting — parsing, chunking, embedding…" : "Queued for ingestion…"}
         </p>
       </div>
@@ -171,14 +171,14 @@ export function UploadForm() {
         <Field label="Source URL" value={fields.source_url} onChange={(v) => updateField("source_url", v)} />
       </div>
 
-      <label className="text-xs text-text/60">
+      <label className="text-xs text-ink/60">
         PDF
         <input
           type="file"
           accept="application/pdf"
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           disabled={isBusy}
-          className="mt-1 block w-full text-sm text-text/70 file:mr-3 file:rounded file:border file:border-border file:bg-surface file:px-3 file:py-1.5 file:text-xs file:text-text disabled:opacity-50"
+          className="mt-1 block w-full text-sm text-ink/70 file:mr-3 file:rounded file:border file:border-line file:bg-card file:px-3 file:py-1.5 file:text-xs file:text-ink disabled:opacity-50"
         />
       </label>
 
@@ -187,7 +187,7 @@ export function UploadForm() {
       <button
         type="submit"
         disabled={isBusy}
-        className="self-start rounded border border-link px-4 py-2 text-sm text-link transition-colors hover:bg-link/10 disabled:cursor-not-allowed disabled:opacity-30"
+        className="self-start rounded border border-accent px-4 py-2 text-sm text-accent transition-colors hover:bg-accent/10 disabled:cursor-not-allowed disabled:opacity-30"
       >
         {submitting ? "Uploading…" : "Upload"}
       </button>
@@ -209,7 +209,7 @@ function Field({
   className?: string;
 }) {
   return (
-    <label className={"text-xs text-text/60 " + (className ?? "")}>
+    <label className={"text-xs text-ink/60 " + (className ?? "")}>
       {label}
       {required && <span className="text-abstained"> *</span>}
       <input
@@ -217,7 +217,7 @@ function Field({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         required={required}
-        className="mt-1 block w-full rounded border border-border bg-surface px-3 py-1.5 text-sm text-text placeholder:text-text/30 focus:border-link focus:outline-none focus:ring-1 focus:ring-link"
+        className="mt-1 block w-full rounded border border-line bg-card px-3 py-1.5 text-sm text-ink placeholder:text-ink/30 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
       />
     </label>
   );

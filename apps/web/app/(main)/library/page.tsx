@@ -22,17 +22,17 @@ function DocumentRow({ doc }: { doc: DocumentOut }) {
   const chunkCount = data?.chunks?.length;
 
   return (
-    <tr className="border-b border-border last:border-0">
+    <tr className="border-b border-line last:border-0">
       <td className="py-3 pr-4">
-        <Link href={`/documents/${encodeURIComponent(doc.slug)}`} className="text-link hover:underline">
+        <Link href={`/documents/${encodeURIComponent(doc.slug)}`} className="text-accent hover:underline">
           {doc.title}
         </Link>
       </td>
-      <td className="standard-code py-3 pr-4 text-xs text-text/70">{doc.standard_code}</td>
-      <td className="py-3 pr-4 text-text/70">{doc.organization}</td>
-      <td className="py-3 pr-4 font-mono text-xs text-text/70">{doc.version ?? "—"}</td>
-      <td className="py-3 pr-4 font-mono text-xs text-text/70">{chunkCount ?? "…"}</td>
-      <td className="py-3 text-xs text-text/50">{doc.license_note}</td>
+      <td className="standard-code py-3 pr-4 text-xs text-ink/70">{doc.standard_code}</td>
+      <td className="py-3 pr-4 text-ink/70">{doc.organization}</td>
+      <td className="py-3 pr-4 font-mono text-xs text-ink/70">{doc.version ?? "—"}</td>
+      <td className="py-3 pr-4 font-mono text-xs text-ink/70">{chunkCount ?? "…"}</td>
+      <td className="py-3 text-xs text-ink/50">{doc.license_note}</td>
     </tr>
   );
 }
@@ -46,19 +46,19 @@ export default function LibraryPage() {
   return (
     <main className="mx-auto max-w-6xl px-6 py-10">
       <h1 className="text-xl font-semibold">Library</h1>
-      <p className="mt-2 text-text/60">
+      <p className="mt-2 text-ink/60">
         Ingested standards. Every answer on <span className="font-mono">/ask</span> cites back to a clause here.
       </p>
 
       <section className="mt-8 overflow-x-auto">
         {isLoading ? (
-          <p className="text-sm text-text/40">Loading…</p>
+          <p className="text-sm text-ink/40">Loading…</p>
         ) : !documents || documents.length === 0 ? (
-          <p className="text-sm text-text/40">No documents ingested yet — upload one below.</p>
+          <p className="text-sm text-ink/40">No documents ingested yet — upload one below.</p>
         ) : (
           <table className="w-full min-w-[720px] border-collapse text-sm">
             <thead>
-              <tr className="border-b border-border text-left text-xs uppercase tracking-widest text-text/40">
+              <tr className="border-b border-line text-left font-mono text-[10px] uppercase tracking-[0.14em] text-ink/40">
                 <th className="pb-2 pr-4 font-medium">Title</th>
                 <th className="pb-2 pr-4 font-medium">Code</th>
                 <th className="pb-2 pr-4 font-medium">Organization</th>
@@ -77,7 +77,7 @@ export default function LibraryPage() {
       </section>
 
       <section className="mt-10 max-w-xl">
-        <h2 className="text-xs font-medium uppercase tracking-widest text-text/50">Upload a standard</h2>
+        <h2 className="font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-ink/50">Upload a standard</h2>
         <UploadForm />
       </section>
     </main>

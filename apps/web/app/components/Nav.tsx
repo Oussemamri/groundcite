@@ -9,15 +9,21 @@ const LINKS = [
   { href: "/evals", label: "Evals" },
 ];
 
+/** Shared top nav for every page except `/ask` (spec §2.2 — `/ask`'s chat
+ * sidebar carries its own wordmark row instead). Warm paper theme: sticky
+ * translucent header, mono wordmark with the grounded-green dot. */
 export function Nav() {
   const pathname = usePathname();
 
   return (
-    <header className="sticky top-0 z-10 border-b border-border bg-surface/95 backdrop-blur">
+    <header className="sticky top-0 z-10 border-b border-line bg-header backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
         <Link href="/" className="flex items-center gap-2">
-          <span aria-hidden className="h-2 w-2 rounded-full bg-grounded" />
-          <span className="font-mono text-sm font-medium tracking-[0.2em] text-text">
+          <span
+            aria-hidden
+            className="h-2 w-2 rounded-full bg-grounded shadow-[0_0_8px_rgba(28,122,77,0.5)]"
+          />
+          <span className="font-mono text-[13px] font-medium tracking-[0.2em] text-ink">
             GROUNDCITE
           </span>
         </Link>
@@ -32,8 +38,8 @@ export function Nav() {
                 aria-current={active ? "page" : undefined}
                 className={
                   active
-                    ? "border-b-2 border-link pb-3 -mb-3 text-link"
-                    : "border-b-2 border-transparent pb-3 -mb-3 text-text/60 transition-colors hover:text-text"
+                    ? "-mb-3 border-b-2 border-accent pb-3 text-accent"
+                    : "-mb-3 border-b-2 border-transparent pb-3 text-ink/60 transition-colors hover:text-ink"
                 }
               >
                 {link.label}

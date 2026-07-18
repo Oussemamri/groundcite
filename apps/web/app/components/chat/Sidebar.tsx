@@ -9,14 +9,14 @@ function statusLine(latestStatus: string | null, turnCount: number | null): {
   className: string;
 } {
   const turns = `${turnCount ?? 0} turn${turnCount === 1 ? "" : "s"}`;
-  if (latestStatus === "grounded") return { text: `GROUNDED · ${turns}`, className: "text-chat-grounded" };
+  if (latestStatus === "grounded") return { text: `GROUNDED · ${turns}`, className: "text-grounded" };
   if (latestStatus === "abstained")
-    return { text: `ABSTAINED · ${turns}`, className: "text-chat-abstained" };
-  return { text: turns, className: "text-chat-ink/40" };
+    return { text: `ABSTAINED · ${turns}`, className: "text-abstained" };
+  return { text: turns, className: "text-ink/40" };
 }
 
 /**
- * Collapsible left sidebar (spec §2.2.1): wordmark, "+ New ask", the
+ * Collapsible left sidebar (spec §2.2): wordmark, "+ New ask", the
  * conversation history list, a corpus footer sourced from real
  * `GET /documents` data (not hardcoded -- same single-document assumption
  * already tracked as GitHub issue #3, not a new gap), and a small
@@ -52,16 +52,16 @@ export function Sidebar({
         // README only specifies "sidebar defaults closed below 1100px,
         // toggle still works," not push-vs-overlay; overlay is the one that
         // doesn't leave the chat squeezed into an unreadable sliver.
-        "flex shrink-0 flex-col overflow-hidden whitespace-nowrap border-r border-chat-line bg-chat-panel transition-[width] duration-[250ms] ease-linear max-[1099px]:fixed max-[1099px]:inset-y-0 max-[1099px]:left-0 max-[1099px]:z-30 max-[1099px]:shadow-2xl " +
+        "flex shrink-0 flex-col overflow-hidden whitespace-nowrap border-r border-line bg-panel transition-[width] duration-[250ms] ease-linear max-[1099px]:fixed max-[1099px]:inset-y-0 max-[1099px]:left-0 max-[1099px]:z-30 max-[1099px]:shadow-2xl " +
         (open ? "w-[264px]" : "w-0")
       }
     >
       <div className="flex items-center gap-[9px] px-5 pb-3.5 pt-[18px]">
         <span
           aria-hidden
-          className="h-2 w-2 rounded-full bg-chat-grounded shadow-[0_0_8px_rgba(28,122,77,0.5)]"
+          className="h-2 w-2 rounded-full bg-grounded shadow-[0_0_8px_rgba(28,122,77,0.5)]"
         />
-        <span className="font-mono text-[13px] font-medium tracking-[0.2em] text-chat-ink">
+        <span className="font-mono text-[13px] font-medium tracking-[0.2em] text-ink">
           GROUNDCITE
         </span>
       </div>
@@ -69,13 +69,13 @@ export function Sidebar({
       <div className="px-3.5 pb-3 pt-1">
         <Link
           href="/ask"
-          className="flex w-full items-center justify-center gap-2 rounded-md border border-chat-accent/45 bg-chat-accent/[0.06] px-3 py-2.5 font-serif text-[13px] font-medium text-chat-accent transition-colors hover:bg-chat-accent/[0.14]"
+          className="flex w-full items-center justify-center gap-2 rounded-md border border-accent/45 bg-accent/[0.06] px-3 py-2.5 font-serif text-[13px] font-medium text-accent transition-colors hover:bg-accent/[0.14]"
         >
           <span className="text-[15px] leading-none">+</span> New ask
         </Link>
       </div>
 
-      <div className="px-5 pb-2 pt-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-chat-ink/40">
+      <div className="px-5 pb-2 pt-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-ink/40">
         Recent
       </div>
       <nav aria-label="Conversations" className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2">
@@ -89,8 +89,8 @@ export function Sidebar({
               className={
                 "block rounded-md border px-3 py-2.5 " +
                 (active
-                  ? "border-chat-accent/20 bg-chat-accent/[0.08] text-chat-ink"
-                  : "border-transparent text-chat-ink/75 hover:bg-chat-ink/[0.04]")
+                  ? "border-accent/20 bg-accent/[0.08] text-ink"
+                  : "border-transparent text-ink/75 hover:bg-ink/[0.04]")
               }
             >
               <div className="truncate font-serif text-[13px]">{c.title}</div>
@@ -102,21 +102,21 @@ export function Sidebar({
         })}
       </nav>
 
-      <div className="flex gap-4 border-t border-chat-line px-5 py-3 font-mono text-[10px] uppercase tracking-[0.1em] text-chat-ink/45">
-        <Link href="/library" className="hover:text-chat-accent">
+      <div className="flex gap-4 border-t border-line px-5 py-3 font-mono text-[10px] uppercase tracking-[0.1em] text-ink/45">
+        <Link href="/library" className="hover:text-accent">
           Library
         </Link>
-        <Link href="/evals" className="hover:text-chat-accent">
+        <Link href="/evals" className="hover:text-accent">
           Evals
         </Link>
       </div>
 
-      <div className="min-w-[224px] border-t border-chat-line px-5 py-3.5">
-        <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-chat-ink/40">
+      <div className="min-w-[224px] border-t border-line px-5 py-3.5">
+        <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink/40">
           Corpus
         </div>
-        <div className="mt-1.5 text-xs text-chat-ink/75">{corpusCode ?? "—"}</div>
-        <div className="mt-0.5 font-mono text-[10px] text-chat-ink/40">
+        <div className="mt-1.5 text-xs text-ink/75">{corpusCode ?? "—"}</div>
+        <div className="mt-0.5 font-mono text-[10px] text-ink/40">
           {chunkCount !== null ? `${chunkCount.toLocaleString()} chunks` : "…"}
           {tauRetrieval !== null ? ` · τ ${tauRetrieval.toFixed(2)}` : ""}
         </div>

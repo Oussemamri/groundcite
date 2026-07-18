@@ -50,10 +50,10 @@ export function DocumentReaderClient({ slug }: { slug: string }) {
   if (isLoading) {
     return (
       <>
-        <aside aria-label="Clause tree" className="text-sm text-text/40">
+        <aside aria-label="Clause tree" className="text-sm text-ink/40">
           Loading…
         </aside>
-        <article className="text-sm text-text/40">Loading…</article>
+        <article className="text-sm text-ink/40">Loading…</article>
       </>
     );
   }
@@ -86,10 +86,10 @@ export function DocumentReaderClient({ slug }: { slug: string }) {
       </aside>
 
       <article>
-        <header className="border-b border-border pb-4">
-          <h1 className="text-lg font-semibold text-text">{doc.title}</h1>
-          <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-text/50">
-            <span className="standard-code text-text/70">{doc.standard_code}</span>
+        <header className="border-b border-line pb-4">
+          <h1 className="text-lg font-semibold text-ink">{doc.title}</h1>
+          <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink/50">
+            <span className="standard-code text-ink/70">{doc.standard_code}</span>
             <span>{doc.organization}</span>
             {doc.version && <span className="font-mono">{doc.version}</span>}
             <span>{doc.license_note}</span>
@@ -98,7 +98,7 @@ export function DocumentReaderClient({ slug }: { slug: string }) {
 
         <div className="mt-6 flex flex-col gap-3">
           {chunks.length === 0 ? (
-            <p className="text-sm text-text/40">This document has no chunks yet.</p>
+            <p className="text-sm text-ink/40">This document has no chunks yet.</p>
           ) : (
             chunks.map((chunk) => {
               const isActive = chunk.id === chunkId;
@@ -110,14 +110,14 @@ export function DocumentReaderClient({ slug }: { slug: string }) {
                   data-section-id={chunk.section_id}
                   className={
                     "scroll-mt-24 rounded border p-4 text-sm transition-colors " +
-                    (isActive ? "border-link bg-link/5" : "border-border bg-surface")
+                    (isActive ? "border-accent bg-accent/5" : "border-line bg-card")
                   }
                 >
-                  <div className="mb-2 flex items-center justify-between gap-2 text-xs text-text/50">
+                  <div className="mb-2 flex items-center justify-between gap-2 text-xs text-ink/50">
                     <span className="font-mono">{chunk.clause_path}</span>
                     {pages && <span className="font-mono">{pages}</span>}
                   </div>
-                  <p className="whitespace-pre-wrap leading-relaxed text-text/90">{chunk.content}</p>
+                  <p className="whitespace-pre-wrap leading-relaxed text-ink/90">{chunk.content}</p>
                 </div>
               );
             })

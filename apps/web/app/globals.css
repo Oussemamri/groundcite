@@ -2,10 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Mission-control base (spec §2.2). */
+/* Warm "paper" base (spec §2.2) — one theme, site-wide. */
 @layer base {
   body {
-    @apply bg-background text-text font-sans antialiased;
+    @apply bg-paper text-ink font-serif antialiased;
   }
 
   /* Signature detail: clause IDs, standard codes, and scores render in mono. */
@@ -14,6 +14,19 @@
   .score {
     @apply font-mono;
   }
+}
+
+/* Custom scrollbar (design handoff: 8px, thumb #CFC9B9, radius 4px). */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: #cfc9b9;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 /* Respect prefers-reduced-motion (the pipeline status dot and the streaming

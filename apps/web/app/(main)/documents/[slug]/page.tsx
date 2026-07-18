@@ -24,10 +24,10 @@ export default async function DocumentReaderPage({
       <Suspense
         fallback={
           <>
-            <aside aria-label="Clause tree" className="text-sm text-text/40">
+            <aside aria-label="Clause tree" className="text-sm text-ink/40">
               Loading…
             </aside>
-            <article className="text-sm text-text/40">Loading…</article>
+            <article className="text-sm text-ink/40">Loading…</article>
           </>
         }
       >

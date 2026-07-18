@@ -15,7 +15,7 @@ function ClauseChip({ clause, hit }: { clause: string; hit: boolean }) {
         "rounded border px-1.5 py-0.5 font-mono text-[11px] " +
         (hit
           ? "border-grounded/40 bg-grounded/10 text-grounded"
-          : "border-border bg-background text-text/60")
+          : "border-line bg-paper text-ink/60")
       }
     >
       {clauseIdOf(clause)}
@@ -41,12 +41,12 @@ function CaseRow({ result }: { result: EvalResultOut }) {
   const correct = result.passed;
 
   return (
-    <div className="border-b border-border last:border-0">
+    <div className="border-b border-line last:border-0">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex w-full items-center gap-3 py-3 text-left hover:bg-surface/60"
+        className="flex w-full items-center gap-3 py-3 text-left hover:bg-ink/[0.04]"
       >
         <span
           aria-hidden
@@ -55,64 +55,64 @@ function CaseRow({ result }: { result: EvalResultOut }) {
           }
           title={correct ? "abstention decision correct" : "abstention decision incorrect"}
         />
-        <span className="flex-1 truncate text-sm text-text">
-          {result.question ?? <span className="text-text/40">question unavailable</span>}
+        <span className="flex-1 truncate text-sm text-ink">
+          {result.question ?? <span className="text-ink/40">question unavailable</span>}
         </span>
         {mustAbstain && (
           <span className="shrink-0 rounded border border-abstained/40 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-abstained">
             must-abstain
           </span>
         )}
-        <span className="shrink-0 font-mono text-xs text-text/60">
+        <span className="shrink-0 font-mono text-xs text-ink/60">
           {formatPct(result.recall_at_5)}
         </span>
-        <span aria-hidden className="shrink-0 text-text/30">
+        <span aria-hidden className="shrink-0 text-ink/30">
           {open ? "▾" : "▸"}
         </span>
       </button>
 
       {open && (
         <div className="pb-4 pl-5 text-sm">
-          <p className="text-text/80">{result.question}</p>
+          <p className="text-ink/80">{result.question}</p>
 
           <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
             <div>
-              <div className="text-[10px] uppercase tracking-widest text-text/40">Recall@5</div>
-              <div className="font-mono text-text">{formatPct(result.recall_at_5)}</div>
+              <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink/40">Recall@5</div>
+              <div className="font-mono text-ink">{formatPct(result.recall_at_5)}</div>
             </div>
             <div>
-              <div className="text-[10px] uppercase tracking-widest text-text/40">Recall@10</div>
-              <div className="font-mono text-text">{formatPct(result.recall_at_10)}</div>
+              <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink/40">Recall@10</div>
+              <div className="font-mono text-ink">{formatPct(result.recall_at_10)}</div>
             </div>
             <div>
-              <div className="text-[10px] uppercase tracking-widest text-text/40">MRR</div>
-              <div className="font-mono text-text">{formatPct(result.mrr)}</div>
+              <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink/40">MRR</div>
+              <div className="font-mono text-ink">{formatPct(result.mrr)}</div>
             </div>
             <div>
-              <div className="text-[10px] uppercase tracking-widest text-text/40">
+              <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink/40">
                 Citation precision
               </div>
-              <div className="font-mono text-text">{formatPct(result.citation_precision)}</div>
+              <div className="font-mono text-ink">{formatPct(result.citation_precision)}</div>
             </div>
             <div>
-              <div className="text-[10px] uppercase tracking-widest text-text/40">Top score</div>
-              <div className="font-mono text-text">
+              <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink/40">Top score</div>
+              <div className="font-mono text-ink">
                 {debug.top_score === null || debug.top_score === undefined
                   ? "—"
                   : debug.top_score.toFixed(4)}
               </div>
             </div>
             <div>
-              <div className="text-[10px] uppercase tracking-widest text-text/40">Latency</div>
-              <div className="font-mono text-text">
+              <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink/40">Latency</div>
+              <div className="font-mono text-ink">
                 {debug.latency_ms === null ? "—" : `${debug.latency_ms} ms`}
               </div>
             </div>
             <div className="col-span-2 sm:col-span-2">
-              <div className="text-[10px] uppercase tracking-widest text-text/40">
+              <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink/40">
                 Abstention
               </div>
-              <div className="text-text/80">
+              <div className="text-ink/80">
                 must_abstain=<span className="font-mono">{String(mustAbstain)}</span>, actual=
                 <span className="font-mono">{status}</span> —{" "}
                 <span className={correct ? "text-grounded" : "text-abstained"}>
@@ -128,12 +128,12 @@ function CaseRow({ result }: { result: EvalResultOut }) {
 
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <div className="text-[10px] uppercase tracking-widest text-text/40">
+              <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink/40">
                 Expected clauses
               </div>
               <div className="mt-1.5 flex flex-wrap gap-1.5">
                 {result.expected_clauses.length === 0 ? (
-                  <span className="text-xs text-text/40">
+                  <span className="text-xs text-ink/40">
                     none (must-abstain case has no expected clauses)
                   </span>
                 ) : (
@@ -144,12 +144,12 @@ function CaseRow({ result }: { result: EvalResultOut }) {
               </div>
             </div>
             <div>
-              <div className="text-[10px] uppercase tracking-widest text-text/40">
+              <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink/40">
                 Cited clauses{abstained ? " (none — abstained)" : ""}
               </div>
               <div className="mt-1.5 flex flex-wrap gap-1.5">
                 {citedClauses.length === 0 ? (
-                  <span className="text-xs text-text/40">—</span>
+                  <span className="text-xs text-ink/40">—</span>
                 ) : (
                   citedClauses.map((c, i) => (
                     <ClauseChip
@@ -170,7 +170,7 @@ function CaseRow({ result }: { result: EvalResultOut }) {
 
 export function EvalCaseDrilldown({ results }: { results: EvalResultOut[] }) {
   if (results.length === 0) {
-    return <p className="text-sm text-text/40">No per-case results for this run.</p>;
+    return <p className="text-sm text-ink/40">No per-case results for this run.</p>;
   }
   return (
     <div>
